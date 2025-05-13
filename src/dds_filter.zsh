@@ -101,66 +101,6 @@ calculate_future_time() {
     echo "TIME:$future_hour:$future_minute"
 }
 
-# Function to check caffeinate status and return JSON output
-check_status() {
-    # Check if caffeinate is running
-    if pgrep -x "caffeinate" >/dev/null; then
-        # Get caffeinate process info
-        local caffeinate_pid=$(pgrep -x "caffeinate")
-        local caffeinate_start=$(ps -o lstart= -p "$caffeinate_pid")
-        local caffeinate_args=$(ps -o command= -p "$caffeinate_pid" | sed 's/^caffeinate //')
-
-        # Parse the arguments to determine if display sleep is allowed
-        local display_sleep_info=""
-        if [[ "$caffeinate_args" == *"-d"* ]]; then
-            display_sleep_info="Display sleep prevention active"
-        else
-            display_sleep_info="Display can sleep (idle prevention only)"
-        fi
-
-        # Format the start time nicely
-        local start_time=$(date -j -f "%a %b %d %T %Y" "$caffeinate_start" "+%l:%M:%S %p" 2>/dev/null | sed 's/^ //')
-
-        # Calculate how long it's been running
-        local start_seconds=$(date -j -f "%a %b %d %T %Y" "$caffeinate_start" "+%s" 2>/dev/null)
-        local current_seconds=$(date "+%s")
-        local duration_seconds=$(( current_seconds - start_seconds ))
-
-        local subtitle=""
-
-        # Check if it's a timed session
-        if [[ "$caffeinate_args" =~ -t[[:space:]]+([0-9]+) ]]; then
-            # It's a timed session, extract total seconds
-            local total_seconds=${match[1]}
-            local remaining_seconds=$(( total_seconds - duration_seconds ))
-
-            # Don't show negative time if process is about to end
-            [[ $remaining_seconds -lt 0 ]] && remaining_seconds=0
-
-            # Format remaining time
-            local remaining_formatted=$(printf '%dh:%02dm:%02ds' $(( remaining_seconds/3600 )) $(( (remaining_seconds%3600)/60 )) $(( remaining_seconds%60 )))
-
-            # Calculate end time
-            local end_time=$(date -r $(( start_seconds + total_seconds )) "+%l:%M %p" | sed 's/^ //')
-
-            # If total duration is long enough (over 2 hours), it might be a target time session
-            if [[ $total_seconds -gt 7200 ]]; then
-                subtitle="Active until $end_time - $display_sleep_info"
-            else
-                subtitle="Remaining: $remaining_formatted - Will end at $end_time - $display_sleep_info"
-            fi
-        else
-            # It's an indefinite session
-            local duration_formatted=$(printf '%dh:%02dm:%02ds' $(( duration_seconds/3600 )) $(( (duration_seconds%3600)/60 )) $(( duration_seconds%60 )))
-            subtitle="Running for $duration_formatted - $display_sleep_info"
-        fi
-
-        echo '{"items":[{"title":"Caffeinate Session Active","subtitle":"'"$subtitle"'","arg":"status","icon":{"path":"icon.png"}}]}'
-    else
-        echo '{"items":[{"title":"No Caffeinate Session Active","subtitle":"Run a command to start caffeinate","arg":"status","icon":{"path":"icon.png"}}]}'
-    fi
-}
-
 # Function to parse the input and calculate the total minutes
 parse_input() {
     local input=(${(@s/ /)1})  # Split the input into parts
@@ -296,6 +236,105 @@ format_duration() {
         echo "$hours hour(s)"
     else
         echo "$minutes minute(s)"
+    fi
+}
+
+# Format time with proper leading zeros
+format_time() {
+    local hours=$1
+    local minutes=$2
+    local seconds=$3
+
+    local formatted="${hours}h:"
+    [[ $minutes -lt 10 ]] && formatted="${formatted}0${minutes}m:" || formatted="${formatted}${minutes}m:"
+    [[ $seconds -lt 10 ]] && formatted="${formatted}0${seconds}s" || formatted="${formatted}${seconds}s"
+
+    echo "$formatted"
+}
+
+# Get display sleep status based on caffeinate arguments
+get_display_sleep_status() {
+    local caffeinate_args=$1
+    [[ "$caffeinate_args" == *"-d"* ]] && echo "Display sleep prevention active" || echo "Display can sleep (idle prevention only)"
+}
+
+# Format message for timed session
+format_timed_session_message() {
+    local remaining_seconds=$1
+    local end_time=$2
+    local display_sleep_info=$3
+    local total_seconds=$4
+
+    local hours=$((remaining_seconds / 3600))
+    local minutes=$(((remaining_seconds % 3600) / 60))
+    local seconds=$((remaining_seconds % 60))
+
+    local remaining_formatted=$(format_time "$hours" "$minutes" "$seconds")
+
+    # If it's a long duration (likely a target time session)
+    if [[ $total_seconds -gt 7200 ]]; then
+        echo "Active until $end_time - $display_sleep_info"
+    else
+        echo "Remaining: $remaining_formatted - Will end at $end_time - $display_sleep_info"
+    fi
+}
+
+# Format message for indefinite session
+format_indefinite_session_message() {
+    local duration_seconds=$1
+    local display_sleep_info=$2
+
+    local hours=$((duration_seconds / 3600))
+    local minutes=$(((duration_seconds % 3600) / 60))
+    local seconds=$((duration_seconds % 60))
+
+    local duration_formatted=$(format_time "$hours" "$minutes" "$seconds")
+
+    echo "Running for $duration_formatted - $display_sleep_info"
+}
+
+# Function to check caffeinate status and return JSON output
+check_status() {
+    # Check if caffeinate is running
+    local caffeinate_pid=$(pgrep -x "caffeinate")
+
+    if [[ -n "$caffeinate_pid" ]]; then
+        # Get process info
+        local caffeinate_info=$(ps -o lstart=,command= -p "$caffeinate_pid")
+        local caffeinate_start=${caffeinate_info%% caffeinate*}
+        local caffeinate_args=${caffeinate_info#*caffeinate }
+
+        # Get display sleep status
+        local display_sleep_info=$(get_display_sleep_status "$caffeinate_args")
+
+        # Calculate timestamps
+        local start_seconds=$(date -j -f "%a %b %d %T %Y" "$caffeinate_start" "+%s" 2>/dev/null)
+        local current_seconds=$(date "+%s")
+        local duration_seconds=$(( current_seconds - start_seconds ))
+
+        local subtitle=""
+
+        # Determine session type and format appropriate message
+        if [[ "$caffeinate_args" =~ -t[[:space:]]+([0-9]+) ]]; then
+            # Timed session
+            local total_seconds=${match[1]}
+            local remaining_seconds=$(( total_seconds - duration_seconds ))
+            [[ $remaining_seconds -lt 0 ]] && remaining_seconds=0
+
+            # Calculate end time
+            local end_time=$(date -r $(( start_seconds + total_seconds )) "+%l:%M %p" | sed 's/^ //')
+
+            subtitle=$(format_timed_session_message "$remaining_seconds" "$end_time" "$display_sleep_info" "$total_seconds")
+        else
+            # Indefinite session
+            subtitle=$(format_indefinite_session_message "$duration_seconds" "$display_sleep_info")
+        fi
+
+        # Escape special characters in JSON
+        subtitle=${subtitle//\"/\\\"}
+        echo '{"items":[{"title":"Caffeinate Session Active","subtitle":"'"$subtitle"'","arg":"status","icon":{"path":"icon.png"}}]}'
+    else
+        echo '{"items":[{"title":"No Caffeinate Session Active","subtitle":"Run a command to start caffeinate","arg":"status","icon":{"path":"icon.png"}}]}'
     fi
 }
 
