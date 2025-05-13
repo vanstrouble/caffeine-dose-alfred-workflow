@@ -49,22 +49,11 @@ get_nearest_future_time() {
     fi
 }
 
-# Helper function to format hours with leading zero
-format_hour() {
-    local hour=$1
-    # Ensure hour is a number without leading zeros
-    hour=${hour#0}
-    [[ -z "$hour" ]] && hour=0
-    [[ "$hour" -lt 10 ]] && echo "0$hour" || echo "$hour"
-}
-
-# Helper function to format minutes with leading zero
-format_minute() {
-    local minute=$1
-    # Ensure minute is a number without leading zeros
-    minute=${minute#0}
-    [[ -z "$minute" ]] && minute=0
-    [[ "$minute" -lt 10 ]] && echo "0$minute" || echo "$minute"
+# Consolidate format_hour and format_minute into one function
+format_number_with_leading_zero() {
+    local num=${1#0}
+    [[ -z "$num" ]] && num=0
+    [[ "$num" -lt 10 ]] && echo "0$num" || echo "$num"
 }
 
 # Helper function to convert AM/PM hour to 24-hour format
@@ -95,8 +84,8 @@ calculate_future_time() {
     local future_minute=$(( (total_minutes + current_hour * 60 + current_minute) % 60 ))
 
     # Format with leading zeros (after removing any existing leading zeros)
-    future_hour=$(format_hour "$future_hour")
-    future_minute=$(format_minute "$future_minute")
+    future_hour=$(format_number_with_leading_zero "$future_hour")
+    future_minute=$(format_number_with_leading_zero "$future_minute")
 
     echo "TIME:$future_hour:$future_minute"
 }
@@ -167,7 +156,7 @@ parse_input() {
                 hour=$(convert_to_24h_format "$hour" "$ampm")
 
                 # Format hour with leading zero
-                hour=$(format_hour "$hour")
+                hour=$(format_number_with_leading_zero "$hour")
                 echo "TIME:$hour:00"
             else
                 # Without AM/PM, use nearest future time
@@ -189,8 +178,8 @@ parse_input() {
                 hour=$(convert_to_24h_format "$hour" "$ampm")
 
                 # Format output with leading zeros
-                hour=$(format_hour "$hour")
-                minute=$(format_minute "$minute")
+                hour=$(format_number_with_leading_zero "$hour")
+                minute=$(format_number_with_leading_zero "$minute")
                 echo "TIME:$hour:$minute"
             else
                 # Without explicit AM/PM, calculate future time
@@ -258,39 +247,32 @@ get_display_sleep_status() {
     [[ "$caffeinate_args" == *"-d"* ]] && echo "Display sleep prevention active" || echo "Display can sleep (idle prevention only)"
 }
 
-# Format message for timed session
-format_timed_session_message() {
-    local remaining_seconds=$1
-    local end_time=$2
-    local display_sleep_info=$3
-    local total_seconds=$4
+# Universal format message function
+format_session_message() {
+    local type=$1
+    local time_value=$2
+    local display_info=$3
+    local extra=$4
 
-    local hours=$((remaining_seconds / 3600))
-    local minutes=$(((remaining_seconds % 3600) / 60))
-    local seconds=$((remaining_seconds % 60))
-
-    local remaining_formatted=$(format_time "$hours" "$minutes" "$seconds")
-
-    # If it's a long duration (likely a target time session)
-    if [[ $total_seconds -gt 7200 ]]; then
-        echo "Active until $end_time - $display_sleep_info"
-    else
-        echo "Remaining: $remaining_formatted - Will end at $end_time - $display_sleep_info"
-    fi
-}
-
-# Format message for indefinite session
-format_indefinite_session_message() {
-    local duration_seconds=$1
-    local display_sleep_info=$2
-
-    local hours=$((duration_seconds / 3600))
-    local minutes=$(((duration_seconds % 3600) / 60))
-    local seconds=$((duration_seconds % 60))
-
-    local duration_formatted=$(format_time "$hours" "$minutes" "$seconds")
-
-    echo "Running for $duration_formatted - $display_sleep_info"
+    case "$type" in
+        "target")
+            echo "Active until $time_value - $display_info"
+            ;;
+        "timed")
+            local h=$((time_value / 3600))
+            local m=$(((time_value % 3600) / 60))
+            local s=$((time_value % 60))
+            local time_fmt=$(format_time "$h" "$m" "$s")
+            echo "Remaining: $time_fmt - Will end at $extra - $display_info"
+            ;;
+        "indefinite")
+            local h=$((time_value / 3600))
+            local m=$(((time_value % 3600) / 60))
+            local s=$((time_value % 60))
+            local time_fmt=$(format_time "$h" "$m" "$s")
+            echo "Running for $time_fmt - $display_info"
+            ;;
+    esac
 }
 
 # Generate JSON output with conditional rerun
@@ -328,99 +310,57 @@ needs_rerun() {
     fi
 }
 
-# Format message for target time session
-format_target_time_message() {
-    local end_time=$1
-    local display_sleep_info=$2
-
-    echo "Active until $end_time - $display_sleep_info"
-}
-
-# Format message for timed session
-format_timed_session_message() {
-    local remaining_seconds=$1
-    local end_time=$2
-    local display_sleep_info=$3
-
-    local hours=$((remaining_seconds / 3600))
-    local minutes=$(((remaining_seconds % 3600) / 60))
-    local seconds=$((remaining_seconds % 60))
-
-    local remaining_formatted=$(format_time "$hours" "$minutes" "$seconds")
-
-    echo "Remaining: $remaining_formatted - Will end at $end_time - $display_sleep_info"
-}
-
-# Format message for indefinite session
-format_indefinite_session_message() {
-    local duration_seconds=$1
-    local display_sleep_info=$2
-
-    local hours=$((duration_seconds / 3600))
-    local minutes=$(((duration_seconds % 3600) / 60))
-    local seconds=$((duration_seconds % 60))
-
-    local duration_formatted=$(format_time "$hours" "$minutes" "$seconds")
-
-    echo "Running for $duration_formatted - $display_sleep_info"
-}
-
 # Function to check caffeinate status and return JSON output
 check_status() {
-    # Check if caffeinate is running
+    # Check if caffeinate is running - early return if not
     local caffeinate_pid=$(pgrep -x "caffeinate")
+    [[ -z "$caffeinate_pid" ]] && generate_alfred_json "No Caffeinate Session Active" \
+        "Run a command to start caffeinate" "status" "false" && return
 
-    if [[ -n "$caffeinate_pid" ]]; then
-        # Get process info
-        local caffeinate_info=$(ps -o lstart=,command= -p "$caffeinate_pid")
-        local caffeinate_start=${caffeinate_info%% caffeinate*}
-        local caffeinate_args=${caffeinate_info#*caffeinate }
+    # Get process info
+    local caffeinate_info=$(ps -o lstart=,command= -p "$caffeinate_pid")
+    local caffeinate_start=${caffeinate_info%% caffeinate*}
+    local caffeinate_args=${caffeinate_info#*caffeinate }
 
-        # Get display sleep status
-        local display_sleep_info=$(get_display_sleep_status "$caffeinate_args")
+    # Calculate timestamps once
+    local start_seconds=$(date -j -f "%a %b %d %T %Y" "$caffeinate_start" "+%s" 2>/dev/null)
+    local current_seconds=$(date "+%s")
+    local duration_seconds=$(( current_seconds - start_seconds ))
 
-        # Calculate timestamps
-        local start_seconds=$(date -j -f "%a %b %d %T %Y" "$caffeinate_start" "+%s" 2>/dev/null)
-        local current_seconds=$(date "+%s")
-        local duration_seconds=$(( current_seconds - start_seconds ))
+    # Get display sleep status
+    local display_sleep_info=$(get_display_sleep_status "$caffeinate_args")
 
-        local subtitle=""
-        local session_type=""
+    # Determine session type and format message in one step
+    local session_type="indefinite"
+    local subtitle=""
+    local total_seconds=0
 
-        # Determine session type and format appropriate message
-        if [[ "$caffeinate_args" =~ -t[[:space:]]+([0-9]+) ]]; then
-            # Timed session
-            local total_seconds=${match[1]}
-            local remaining_seconds=$(( total_seconds - duration_seconds ))
-            [[ $remaining_seconds -lt 0 ]] && remaining_seconds=0
+    # Extract timed session information if present
+    if [[ "$caffeinate_args" =~ -t[[:space:]]+([0-9]+) ]]; then
+        total_seconds=${match[1]}
+        local remaining_seconds=$(( total_seconds - duration_seconds ))
+        [[ $remaining_seconds -lt 0 ]] && remaining_seconds=0
 
-            # Calculate end time
-            local end_time=$(date -r $(( start_seconds + total_seconds )) "+%l:%M %p" | sed 's/^ //')
+        # Calculate end time once
+        local end_time=$(date -r $(( start_seconds + total_seconds )) "+%l:%M %p" | sed 's/^ //')
 
-            # Determine if this is a regular timed session or a target time session
-            if [[ $total_seconds -gt 7200 ]]; then
-                session_type="target_time"
-                subtitle=$(format_target_time_message "$end_time" "$display_sleep_info")
-            else
-                session_type="timed"
-                subtitle=$(format_timed_session_message "$remaining_seconds" "$end_time" "$display_sleep_info")
-            fi
+        # Determine session type based on duration
+        if [[ $total_seconds -gt 7200 ]]; then
+            session_type="target_time"
+            subtitle=$(format_session_message "target" "$end_time" "$display_sleep_info")
         else
-            # Indefinite session
-            session_type="indefinite"
-            subtitle=$(format_indefinite_session_message "$duration_seconds" "$display_sleep_info")
+            session_type="timed"
+            subtitle=$(format_session_message "timed" "$remaining_seconds" "$display_sleep_info" "$end_time")
         fi
-
-        # Determine if we need rerun based on session type
-        local needs_rerun=$(needs_rerun "$session_type" "$total_seconds")
-
-        # Escape special characters in JSON
-        subtitle=${subtitle//\"/\\\"}
-
-        generate_alfred_json "Caffeinate Session Active" "$subtitle" "status" "$needs_rerun"
     else
-        generate_alfred_json "No Caffeinate Session Active" "Run a command to start caffeinate" "status" "false"
+        # Indefinite session
+        subtitle=$(format_session_message "indefinite" "$duration_seconds" "$display_sleep_info")
     fi
+
+    # Escape JSON special characters and generate final output
+    subtitle=${subtitle//\"/\\\"}
+    generate_alfred_json "Caffeinate Session Active" "$subtitle" "status" \
+        $(needs_rerun "$session_type" "$total_seconds")
 }
 
 # Function to generate Alfred JSON output
