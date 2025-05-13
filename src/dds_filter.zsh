@@ -293,6 +293,78 @@ format_indefinite_session_message() {
     echo "Running for $duration_formatted - $display_sleep_info"
 }
 
+# Generate JSON output with conditional rerun
+generate_alfred_json() {
+    local title=$1
+    local subtitle=$2
+    local arg=$3
+    local needs_rerun=$4
+
+    local rerun_part=""
+    [[ "$needs_rerun" == "true" ]] && rerun_part='"rerun":1,'
+
+    echo '{'${rerun_part}'"items":[{"title":"'"$title"'","subtitle":"'"$subtitle"'","arg":"'"$arg"'","icon":{"path":"icon.png"}}]}'
+}
+
+# Helper function to determine if a session needs rerun
+needs_rerun() {
+    local session_type=$1
+    local total_seconds=$2
+
+    # For target time sessions or very long sessions (>2h), we don't need frequent updates
+    if [[ "$session_type" == "timed" && $total_seconds -gt 7200 ]]; then
+        echo "false"
+    elif [[ "$session_type" == "target_time" ]]; then
+        echo "false"
+    elif [[ "$session_type" == "indefinite" ]]; then
+        # Indefinite sessions show elapsed time, so we want updates
+        echo "true"
+    elif [[ "$session_type" == "timed" ]]; then
+        # Regular timed sessions show remaining time, so we want updates
+        echo "true"
+    else
+        # Default to not needing rerun
+        echo "false"
+    fi
+}
+
+# Format message for target time session
+format_target_time_message() {
+    local end_time=$1
+    local display_sleep_info=$2
+
+    echo "Active until $end_time - $display_sleep_info"
+}
+
+# Format message for timed session
+format_timed_session_message() {
+    local remaining_seconds=$1
+    local end_time=$2
+    local display_sleep_info=$3
+
+    local hours=$((remaining_seconds / 3600))
+    local minutes=$(((remaining_seconds % 3600) / 60))
+    local seconds=$((remaining_seconds % 60))
+
+    local remaining_formatted=$(format_time "$hours" "$minutes" "$seconds")
+
+    echo "Remaining: $remaining_formatted - Will end at $end_time - $display_sleep_info"
+}
+
+# Format message for indefinite session
+format_indefinite_session_message() {
+    local duration_seconds=$1
+    local display_sleep_info=$2
+
+    local hours=$((duration_seconds / 3600))
+    local minutes=$(((duration_seconds % 3600) / 60))
+    local seconds=$((duration_seconds % 60))
+
+    local duration_formatted=$(format_time "$hours" "$minutes" "$seconds")
+
+    echo "Running for $duration_formatted - $display_sleep_info"
+}
+
 # Function to check caffeinate status and return JSON output
 check_status() {
     # Check if caffeinate is running
@@ -313,6 +385,7 @@ check_status() {
         local duration_seconds=$(( current_seconds - start_seconds ))
 
         local subtitle=""
+        local session_type=""
 
         # Determine session type and format appropriate message
         if [[ "$caffeinate_args" =~ -t[[:space:]]+([0-9]+) ]]; then
@@ -324,17 +397,29 @@ check_status() {
             # Calculate end time
             local end_time=$(date -r $(( start_seconds + total_seconds )) "+%l:%M %p" | sed 's/^ //')
 
-            subtitle=$(format_timed_session_message "$remaining_seconds" "$end_time" "$display_sleep_info" "$total_seconds")
+            # Determine if this is a regular timed session or a target time session
+            if [[ $total_seconds -gt 7200 ]]; then
+                session_type="target_time"
+                subtitle=$(format_target_time_message "$end_time" "$display_sleep_info")
+            else
+                session_type="timed"
+                subtitle=$(format_timed_session_message "$remaining_seconds" "$end_time" "$display_sleep_info")
+            fi
         else
             # Indefinite session
+            session_type="indefinite"
             subtitle=$(format_indefinite_session_message "$duration_seconds" "$display_sleep_info")
         fi
 
+        # Determine if we need rerun based on session type
+        local needs_rerun=$(needs_rerun "$session_type" "$total_seconds")
+
         # Escape special characters in JSON
         subtitle=${subtitle//\"/\\\"}
-        echo '{"items":[{"title":"Caffeinate Session Active","subtitle":"'"$subtitle"'","arg":"status","icon":{"path":"icon.png"}}]}'
+
+        generate_alfred_json "Caffeinate Session Active" "$subtitle" "status" "$needs_rerun"
     else
-        echo '{"items":[{"title":"No Caffeinate Session Active","subtitle":"Run a command to start caffeinate","arg":"status","icon":{"path":"icon.png"}}]}'
+        generate_alfred_json "No Caffeinate Session Active" "Run a command to start caffeinate" "status" "false"
     fi
 }
 
