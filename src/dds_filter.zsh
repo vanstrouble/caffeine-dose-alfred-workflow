@@ -126,10 +126,36 @@ check_status() {
         local current_seconds=$(date "+%s")
         local duration_seconds=$(( current_seconds - start_seconds ))
 
-        # Format duration
-        local duration_formatted=$(printf '%dh:%02dm:%02ds' $(( duration_seconds/3600 )) $(( (duration_seconds%3600)/60 )) $(( duration_seconds%60 )))
+        local subtitle=""
 
-        echo '{"items":[{"title":"Caffeinate Session Active","subtitle":"Running for '"$duration_formatted"' - '"$display_sleep_info"'","arg":"status","icon":{"path":"icon.png"}}]}'
+        # Check if it's a timed session
+        if [[ "$caffeinate_args" =~ -t[[:space:]]+([0-9]+) ]]; then
+            # It's a timed session, extract total seconds
+            local total_seconds=${match[1]}
+            local remaining_seconds=$(( total_seconds - duration_seconds ))
+
+            # Don't show negative time if process is about to end
+            [[ $remaining_seconds -lt 0 ]] && remaining_seconds=0
+
+            # Format remaining time
+            local remaining_formatted=$(printf '%dh:%02dm:%02ds' $(( remaining_seconds/3600 )) $(( (remaining_seconds%3600)/60 )) $(( remaining_seconds%60 )))
+
+            # Calculate end time
+            local end_time=$(date -r $(( start_seconds + total_seconds )) "+%l:%M %p" | sed 's/^ //')
+
+            # If total duration is long enough (over 2 hours), it might be a target time session
+            if [[ $total_seconds -gt 7200 ]]; then
+                subtitle="Active until $end_time - $display_sleep_info"
+            else
+                subtitle="Remaining: $remaining_formatted - Will end at $end_time - $display_sleep_info"
+            fi
+        else
+            # It's an indefinite session
+            local duration_formatted=$(printf '%dh:%02dm:%02ds' $(( duration_seconds/3600 )) $(( (duration_seconds%3600)/60 )) $(( duration_seconds%60 )))
+            subtitle="Running for $duration_formatted - $display_sleep_info"
+        fi
+
+        echo '{"items":[{"title":"Caffeinate Session Active","subtitle":"'"$subtitle"'","arg":"status","icon":{"path":"icon.png"}}]}'
     else
         echo '{"items":[{"title":"No Caffeinate Session Active","subtitle":"Run a command to start caffeinate","arg":"status","icon":{"path":"icon.png"}}]}'
     fi
