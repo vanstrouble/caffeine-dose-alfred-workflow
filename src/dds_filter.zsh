@@ -101,6 +101,40 @@ calculate_future_time() {
     echo "TIME:$future_hour:$future_minute"
 }
 
+# Function to check caffeinate status and return JSON output
+check_status() {
+    # Check if caffeinate is running
+    if pgrep -x "caffeinate" >/dev/null; then
+        # Get caffeinate process info
+        local caffeinate_pid=$(pgrep -x "caffeinate")
+        local caffeinate_start=$(ps -o lstart= -p "$caffeinate_pid")
+        local caffeinate_args=$(ps -o command= -p "$caffeinate_pid" | sed 's/^caffeinate //')
+
+        # Parse the arguments to determine if display sleep is allowed
+        local display_sleep_info=""
+        if [[ "$caffeinate_args" == *"-d"* ]]; then
+            display_sleep_info="Display sleep prevention active"
+        else
+            display_sleep_info="Display can sleep (idle prevention only)"
+        fi
+
+        # Format the start time nicely
+        local start_time=$(date -j -f "%a %b %d %T %Y" "$caffeinate_start" "+%l:%M:%S %p" 2>/dev/null | sed 's/^ //')
+
+        # Calculate how long it's been running
+        local start_seconds=$(date -j -f "%a %b %d %T %Y" "$caffeinate_start" "+%s" 2>/dev/null)
+        local current_seconds=$(date "+%s")
+        local duration_seconds=$(( current_seconds - start_seconds ))
+
+        # Format duration
+        local duration_formatted=$(printf '%dh:%02dm:%02ds' $(( duration_seconds/3600 )) $(( (duration_seconds%3600)/60 )) $(( duration_seconds%60 )))
+
+        echo '{"items":[{"title":"Caffeinate Session Active","subtitle":"Running for '"$duration_formatted"' - '"$display_sleep_info"'","arg":"status","icon":{"path":"icon.png"}}]}'
+    else
+        echo '{"items":[{"title":"No Caffeinate Session Active","subtitle":"Run a command to start caffeinate","arg":"status","icon":{"path":"icon.png"}}]}'
+    fi
+}
+
 # Function to parse the input and calculate the total minutes
 parse_input() {
     local input=(${(@s/ /)1})  # Split the input into parts
@@ -109,6 +143,9 @@ parse_input() {
 
     # Early return for invalid input when empty
     [[ -z "${input[1]}" ]] && echo "0" && return
+
+    # Check for status command
+    [[ "${input[1]}" == "s" ]] && echo "status" && return
 
     # Handle single input cases with early returns
     if [[ "${#input[@]}" -eq 1 ]]; then
@@ -249,6 +286,12 @@ generate_output() {
     # Check for indefinite mode (no rerun needed)
     if [[ "$input_result" == "indefinite" ]]; then
         echo '{"items":[{"title":"Active indefinitely","subtitle":"Keep your Mac awake until manually disabled","arg":"indefinite","icon":{"path":"icon.png"}}]}'
+        return
+    fi
+
+    # Check for status command
+    if [[ "$input_result" == "status" ]]; then
+        check_status
         return
     fi
 
