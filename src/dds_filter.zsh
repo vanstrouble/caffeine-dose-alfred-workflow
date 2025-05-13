@@ -90,128 +90,6 @@ calculate_future_time() {
     echo "TIME:$future_hour:$future_minute"
 }
 
-# Function to parse the input and calculate the total minutes
-parse_input() {
-    local input=(${(@s/ /)1})  # Split the input into parts
-    local current_hour=$(date +"%H")
-    local current_minute=$(date +"%M")
-
-    # Early return for invalid input when empty
-    [[ -z "${input[1]}" ]] && echo "0" && return
-
-    # Check for status command
-    [[ "${input[1]}" == "s" ]] && echo "status" && return
-
-    # Handle single input cases with early returns
-    if [[ "${#input[@]}" -eq 1 ]]; then
-        # Special value for indefinite mode
-        [[ "${input[1]}" == "i" ]] && echo "indefinite" && return
-
-        # Format: 2h (hours)
-        if [[ "${input[1]}" =~ ^[0-9]+h$ ]]; then
-            echo $(( ${input[1]%h} * 60 ))
-            return
-        fi
-
-        # Direct number input (minutes)
-        if [[ "${input[1]}" =~ ^[0-9]+$ ]]; then
-            echo "${input[1]}"
-            return
-        fi
-
-        # Format: 8 or 8: (hour only)
-        if [[ "${input[1]}" =~ ^([0-9]{1,2}):?$ ]]; then
-            local hour=${match[1]}
-            local minute=0
-
-            # Parameter expansion is more efficient than sed
-            hour=${hour#0}
-
-            # Check if the input has a colon at the end
-            if [[ "${input[1]}" =~ :$ ]]; then
-                # If it has a colon, calculate specific time
-                local total_minutes=$(get_nearest_future_time "$hour" "$minute" "$current_hour" "$current_minute")
-
-                # Use helper function to calculate future time
-                local future_time=$(calculate_future_time "$total_minutes" "$current_hour" "$current_minute")
-                # For hour-only format with colon, we want to force minutes to 00
-                echo "${future_time%:*}:00"
-            else
-                # No colon, return minutes
-                local total_minutes=$(get_nearest_future_time "$hour" "$minute" "$current_hour" "$current_minute")
-                echo "$total_minutes"
-            fi
-            return
-        fi
-
-        # Format: 8a, 8am, 8p, 8pm
-        if [[ "${input[1]}" =~ ^([0-9]{1,2})([aApP])?(m)?$ ]]; then
-            local hour=${match[1]}
-            local ampm=${match[2]:-""}
-            local minute=0
-
-            # With AM/PM indicator
-            if [[ -n "$ampm" ]]; then
-                # Convert to 24-hour format using helper function
-                hour=$(convert_to_24h_format "$hour" "$ampm")
-
-                # Format hour with leading zero
-                hour=$(format_number_with_leading_zero "$hour")
-                echo "TIME:$hour:00"
-            else
-                # Without AM/PM, use nearest future time
-                hour=${hour#0}
-                echo $(get_nearest_future_time "$hour" "$minute" "$current_hour" "$current_minute")
-            fi
-            return
-        fi
-
-        # Format: 8:30, 8:30a, 8:30am, 8:30p, 8:30pm
-        if [[ "${input[1]}" =~ ^([0-9]{1,2}):([0-9]{1,2})([aApP])?([mM])?$ ]]; then
-            local hour=${match[1]}
-            local minute=${match[2]}
-            local ampm=${match[3]:-""}
-
-            # With AM/PM indicator
-            if [[ -n "$ampm" ]]; then
-                # Convert to 24-hour format using helper function
-                hour=$(convert_to_24h_format "$hour" "$ampm")
-
-                # Format output with leading zeros
-                hour=$(format_number_with_leading_zero "$hour")
-                minute=$(format_number_with_leading_zero "$minute")
-                echo "TIME:$hour:$minute"
-            else
-                # Without explicit AM/PM, calculate future time
-                hour=${hour#0}
-                local total_minutes=$(get_nearest_future_time "$hour" "$minute" "$current_hour" "$current_minute")
-
-                # Use helper function to calculate and format future time
-                echo $(calculate_future_time "$total_minutes" "$current_hour" "$current_minute")
-            fi
-            return
-        fi
-
-        # If we get here, it's an invalid single input
-        echo "0"
-        return
-    fi
-
-    # Handle two-part input (hours and minutes)
-    if [[ "${#input[@]}" -eq 2 ]]; then
-        if [[ "${input[1]}" =~ ^[0-9]+$ && "${input[2]}" =~ ^[0-9]+$ ]]; then
-            echo $(( input[1] * 60 + input[2] ))
-            return
-        fi
-
-        # Invalid two-part input
-        echo "0"
-        return
-    fi
-
-    # Default case: invalid input
-    echo "0"
-}
 
 # Function to format the duration in hours and minutes
 format_duration() {
@@ -361,6 +239,129 @@ check_status() {
     subtitle=${subtitle//\"/\\\"}
     generate_alfred_json "Caffeinate Session Active" "$subtitle" "status" \
         $(needs_rerun "$session_type" "$total_seconds")
+}
+
+# Function to parse the input and calculate the total minutes
+parse_input() {
+    local input=(${(@s/ /)1})  # Split the input into parts
+    local current_hour=$(date +"%H")
+    local current_minute=$(date +"%M")
+
+    # Early return for invalid input when empty
+    [[ -z "${input[1]}" ]] && echo "0" && return
+
+    # Check for status command
+    [[ "${input[1]}" == "s" ]] && echo "status" && return
+
+    # Handle single input cases with early returns
+    if [[ "${#input[@]}" -eq 1 ]]; then
+        # Special value for indefinite mode
+        [[ "${input[1]}" == "i" ]] && echo "indefinite" && return
+
+        # Format: 2h (hours)
+        if [[ "${input[1]}" =~ ^[0-9]+h$ ]]; then
+            echo $(( ${input[1]%h} * 60 ))
+            return
+        fi
+
+        # Direct number input (minutes)
+        if [[ "${input[1]}" =~ ^[0-9]+$ ]]; then
+            echo "${input[1]}"
+            return
+        fi
+
+        # Format: 8 or 8: (hour only)
+        if [[ "${input[1]}" =~ ^([0-9]{1,2}):?$ ]]; then
+            local hour=${match[1]}
+            local minute=0
+
+            # Parameter expansion is more efficient than sed
+            hour=${hour#0}
+
+            # Check if the input has a colon at the end
+            if [[ "${input[1]}" =~ :$ ]]; then
+                # If it has a colon, calculate specific time
+                local total_minutes=$(get_nearest_future_time "$hour" "$minute" "$current_hour" "$current_minute")
+
+                # Use helper function to calculate future time
+                local future_time=$(calculate_future_time "$total_minutes" "$current_hour" "$current_minute")
+                # For hour-only format with colon, we want to force minutes to 00
+                echo "${future_time%:*}:00"
+            else
+                # No colon, return minutes
+                local total_minutes=$(get_nearest_future_time "$hour" "$minute" "$current_hour" "$current_minute")
+                echo "$total_minutes"
+            fi
+            return
+        fi
+
+        # Format: 8a, 8am, 8p, 8pm
+        if [[ "${input[1]}" =~ ^([0-9]{1,2})([aApP])?(m)?$ ]]; then
+            local hour=${match[1]}
+            local ampm=${match[2]:-""}
+            local minute=0
+
+            # With AM/PM indicator
+            if [[ -n "$ampm" ]]; then
+                # Convert to 24-hour format using helper function
+                hour=$(convert_to_24h_format "$hour" "$ampm")
+
+                # Format hour with leading zero
+                hour=$(format_number_with_leading_zero "$hour")
+                echo "TIME:$hour:00"
+            else
+                # Without AM/PM, use nearest future time
+                hour=${hour#0}
+                echo $(get_nearest_future_time "$hour" "$minute" "$current_hour" "$current_minute")
+            fi
+            return
+        fi
+
+        # Format: 8:30, 8:30a, 8:30am, 8:30p, 8:30pm
+        if [[ "${input[1]}" =~ ^([0-9]{1,2}):([0-9]{1,2})([aApP])?([mM])?$ ]]; then
+            local hour=${match[1]}
+            local minute=${match[2]}
+            local ampm=${match[3]:-""}
+
+            # With AM/PM indicator
+            if [[ -n "$ampm" ]]; then
+                # Convert to 24-hour format using helper function
+                hour=$(convert_to_24h_format "$hour" "$ampm")
+
+                # Format output with leading zeros
+                hour=$(format_number_with_leading_zero "$hour")
+                minute=$(format_number_with_leading_zero "$minute")
+                echo "TIME:$hour:$minute"
+            else
+                # Without explicit AM/PM, calculate future time
+                hour=${hour#0}
+                local total_minutes=$(get_nearest_future_time "$hour" "$minute" "$current_hour" "$current_minute")
+
+                # Use helper function to calculate and format future time
+                echo $(calculate_future_time "$total_minutes" "$current_hour" "$current_minute")
+            fi
+            return
+        fi
+
+        # If we get here, it's an invalid single input
+        echo "0"
+        return
+    fi
+
+    # Handle two-part input (hours and minutes)
+    if [[ "${#input[@]}" -eq 2 ]]; then
+        if [[ "${input[1]}" =~ ^[0-9]+$ && "${input[2]}" =~ ^[0-9]+$ ]]; then
+            echo $(( input[1] * 60 + input[2] ))
+            return
+        fi
+
+        # Invalid two-part input
+        echo "0"
+        return
+    fi
+
+    # Default case: invalid input
+    echo "0"
 }
 
 # Function to generate Alfred JSON output

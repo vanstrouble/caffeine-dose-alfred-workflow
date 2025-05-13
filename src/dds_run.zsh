@@ -218,10 +218,6 @@ main() {
         exit 1
     elif [[ "$INPUT" == "indefinite" ]]; then
         start_indefinite_session "$display_sleep_allow"
-    elif [[ "$INPUT" == TIME:* ]]; then
-        handle_target_time "$INPUT" "$display_sleep_allow"
-    elif [[ "$INPUT" =~ ^[0-9]+$ ]]; then
-        handle_duration "$INPUT" "$display_sleep_allow"
     elif [[ "$INPUT" == "status" ]]; then
         # Just for completeness - status is handled in the filter script
         if pgrep -x "caffeinate" >/dev/null; then
@@ -229,9 +225,10 @@ main() {
         else
             echo "Caffeinate is not active."
         fi
-    else
-        echo "Error: Invalid input type."
-        exit 1
+    elif [[ "$INPUT" == TIME:* ]]; then
+        handle_target_time "$INPUT" "$display_sleep_allow"
+    elif [[ "$INPUT" =~ ^[0-9]+$ ]]; then
+        handle_duration "$INPUT" "$display_sleep_allow"
     fi
 }
 
