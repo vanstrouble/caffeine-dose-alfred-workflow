@@ -4,6 +4,7 @@ Keeps your Mac awake using the `caffeinate` command-line utility. From Alfred, y
 
 ## Download
 
+- Available on the Alfred Gallery. [Get it here](https://alfred.app/workflows/vanstrouble/caffeine-dose/).
 -   Get it on GitHub [here](https://github.com/vanstrouble/caffeine-dose-alfred-workflow/releases).
 
 **Using Amphetamine? No worries — grab the workflow dose [here](https://github.com/vanstrouble/dose-alfred-workflow).**
