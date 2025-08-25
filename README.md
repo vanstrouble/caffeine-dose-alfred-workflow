@@ -35,8 +35,8 @@ Hold the **Command (⌘)** key while using the `cfs` command, the session will a
 
 | Command     | Description                                     |
 |-------------|-------------------------------------------------|
+| `cfs s`     | Shows status, time left, and if display can sleep. |
 | `cfs i`     | Keeps your Mac awake indefinitely.              |
-| `cfs s`     | Checks if caffeinate is active or the remaining time. |
 | `cfs 15`    | Keeps your Mac awake for 15 minutes.            |
 | `cfs 2h`    | Keeps your Mac awake for 2 hours.               |
 | `cfs 1 30`  | Keeps your Mac awake for 1 hour and 30 minutes. |
