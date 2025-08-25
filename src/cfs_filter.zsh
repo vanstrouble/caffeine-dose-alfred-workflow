@@ -106,96 +106,22 @@ format_duration() {
     fi
 }
 
-# Format time with proper leading zeros
-format_time() {
-    local hours=$1
-    local minutes=$2
-    local seconds=$3
-
-    local formatted="${hours}h:"
-    [[ $minutes -lt 10 ]] && formatted="${formatted}0${minutes}m:" || formatted="${formatted}${minutes}m:"
-    [[ $seconds -lt 10 ]] && formatted="${formatted}0${seconds}s" || formatted="${formatted}${seconds}s"
-
-    echo "$formatted"
-}
-
 # Get display sleep status based on caffeinate arguments
 get_display_sleep_status() {
     local caffeinate_args=$1
-    [[ "$caffeinate_args" == *"-d"* ]] && echo "Display sleep prevention active" || echo "Display can sleep (idle prevention only)"
+    [[ "$caffeinate_args" == *"-d"* ]] && echo " - Display stays awake" || echo " - Display can sleep"
 }
 
-# Universal format message function
-format_session_message() {
-    local type=$1
-    local time_value=$2
-    local display_info=$3
-    local extra=$4
-
-    case "$type" in
-        "target")
-            echo "Active until $time_value - $display_info"
-            ;;
-        "timed")
-            local h=$((time_value / 3600))
-            local m=$(((time_value % 3600) / 60))
-            local s=$((time_value % 60))
-            local time_fmt=$(format_time "$h" "$m" "$s")
-            echo "Remaining: $time_fmt - Will end at $extra - $display_info"
-            ;;
-        "indefinite")
-            local h=$((time_value / 3600))
-            local m=$(((time_value % 3600) / 60))
-            local s=$((time_value % 60))
-            local time_fmt=$(format_time "$h" "$m" "$s")
-            echo "Running for $time_fmt - $display_info"
-            ;;
-    esac
-}
-
-# Generate JSON output with conditional rerun
-generate_alfred_json() {
-    local title=$1
-    local subtitle=$2
-    local arg=$3
-    local needs_rerun=$4
-
-    local rerun_part=""
-    [[ "$needs_rerun" == "true" ]] && rerun_part='"rerun":1,'
-
-    echo '{'${rerun_part}'"items":[{"title":"'"$title"'","subtitle":"'"$subtitle"'","arg":"'"$arg"'","icon":{"path":"icon.png"}}]}'
-}
-
-# Helper function to determine if a session needs rerun
-needs_rerun() {
-    local session_type=$1
-    local total_seconds=$2
-
-    # For target time sessions or very long sessions (>2h), we don't need frequent updates
-    if [[ "$session_type" == "timed" && $total_seconds -gt 7200 ]]; then
-        echo "false"
-    elif [[ "$session_type" == "target_time" ]]; then
-        echo "false"
-    elif [[ "$session_type" == "indefinite" ]]; then
-        # Indefinite sessions show elapsed time, so we want updates
-        echo "true"
-    elif [[ "$session_type" == "timed" ]]; then
-        # Regular timed sessions show remaining time, so we want updates
-        echo "true"
-    else
-        # Default to not needing rerun
-        echo "false"
-    fi
-}
-
-# Function to check caffeinate status and return JSON output
+# Function to check caffeinate status and return structured data
 check_status() {
     # Check if caffeinate is running - early return if not
     local caffeinate_pid=$(pgrep -x "caffeinate")
-    [[ -z "$caffeinate_pid" ]] && generate_alfred_json "No Caffeinate Session Active" \
-        "Run a command to start caffeinate" "status" "false" && return
+    if [[ -z "$caffeinate_pid" ]]; then
+        echo "Caffeinate deactivated|Run a command to start caffeinate|false"
+        return
+    fi
 
-    # Get process info
+    # Get process info in a single call
     local caffeinate_info=$(ps -o lstart=,command= -p "$caffeinate_pid")
     local caffeinate_start=${caffeinate_info%% caffeinate*}
     local caffeinate_args=${caffeinate_info#*caffeinate }
@@ -208,37 +134,62 @@ check_status() {
     # Get display sleep status
     local display_sleep_info=$(get_display_sleep_status "$caffeinate_args")
 
-    # Determine session type and format message in one step
-    local session_type="indefinite"
+    local title=""
     local subtitle=""
-    local total_seconds=0
+    local needs_rerun="false"
 
     # Extract timed session information if present
     if [[ "$caffeinate_args" =~ -t[[:space:]]+([0-9]+) ]]; then
-        total_seconds=${match[1]}
+        local total_seconds=${match[1]}
         local remaining_seconds=$(( total_seconds - duration_seconds ))
         [[ $remaining_seconds -lt 0 ]] && remaining_seconds=0
 
-        # Calculate end time once
-        local end_time=$(date -r $(( start_seconds + total_seconds )) "+%l:%M %p" | sed 's/^ //')
-
-        # Determine session type based on duration
-        if [[ $total_seconds -gt 7200 ]]; then
-            session_type="target_time"
-            subtitle=$(format_session_message "target" "$end_time" "$display_sleep_info")
+        # Calculate end time with time format preference
+        local end_time
+        if [[ "${alfred_time_format:-a}" == "a" ]]; then
+            end_time=$(date -r $(( start_seconds + total_seconds )) "+%l:%M %p" | sed 's/^ //')
         else
-            session_type="timed"
-            subtitle=$(format_session_message "timed" "$remaining_seconds" "$display_sleep_info" "$end_time")
+            end_time=$(date -r $(( start_seconds + total_seconds )) "+%H:%M")
+        fi
+
+        title="Caffeinate active until $end_time"
+
+        # Format remaining time naturally
+        if [[ $remaining_seconds -lt 60 ]]; then
+            subtitle="${remaining_seconds}s left${display_sleep_info}"
+        elif [[ $remaining_seconds -lt 3600 ]]; then
+            local minutes=$(( remaining_seconds / 60 ))
+            local seconds=$(( remaining_seconds % 60 ))
+            if [[ $seconds -eq 0 ]]; then
+                subtitle="${minutes}m left${display_sleep_info}"
+            else
+                subtitle="${minutes}m ${seconds}s left${display_sleep_info}"
+            fi
+        else
+            local hours=$(( remaining_seconds / 3600 ))
+            local minutes=$(( (remaining_seconds % 3600) / 60 ))
+            if [[ $minutes -eq 0 ]]; then
+                subtitle="${hours}h left${display_sleep_info}"
+            else
+                subtitle="${hours}h ${minutes}m left${display_sleep_info}"
+            fi
+        fi
+
+        # Smart rerun: only for sessions under 1 hour for better performance
+        if [[ $remaining_seconds -le 3600 ]]; then
+            needs_rerun="true"
+        else
+            needs_rerun="false"
         fi
     else
         # Indefinite session
-        subtitle=$(format_session_message "indefinite" "$duration_seconds" "$display_sleep_info")
+        title="Caffeinate active indefinitely"
+        subtitle="Session running indefinitely${display_sleep_info}"
+        needs_rerun="false"  # No need for frequent updates on indefinite sessions
     fi
 
-    # Escape JSON special characters and generate final output
-    subtitle=${subtitle//\"/\\\"}
-    generate_alfred_json "Caffeinate Session Active" "$subtitle" "status" \
-        $(needs_rerun "$session_type" "$total_seconds")
+    # Return structured data: title|subtitle|needs_rerun
+    echo "$title|$subtitle|$needs_rerun"
 }
 
 # Function to parse the input and calculate the total minutes
@@ -382,7 +333,21 @@ generate_output() {
 
     # Check for status command
     if [[ "$input_result" == "status" ]]; then
-        check_status
+        local status_data=$(check_status)
+        local title=${status_data%%|*}
+        local remaining=${status_data#*|}
+        local subtitle=${remaining%%|*}
+        local needs_rerun=${status_data##*|}
+
+        # Escape JSON special characters
+        title=${title//\"/\\\"}
+        subtitle=${subtitle//\"/\\\"}
+
+        # Generate JSON with conditional rerun
+        local rerun_part=""
+        [[ "$needs_rerun" == "true" ]] && rerun_part='"rerun":1,'
+
+        echo '{'${rerun_part}'"items":[{"title":"'"$title"'","subtitle":"'"$subtitle"'","arg":"status","icon":{"path":"icon.png"}}]}'
         return
     fi
 
