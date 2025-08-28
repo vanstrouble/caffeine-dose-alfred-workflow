@@ -4,11 +4,12 @@
 calculate_end_time() {
     local minutes=$1
 
-    # Check Alfred variable for time format preference
+    # Check Alfred variable for time format preference and calculate in single call
     # 'a' is 12-hour format, 'b' is 24-hour format
     if [[ "${alfred_time_format:-a}" == "a" ]]; then
-        # 12-hour format with AM/PM including seconds
-        date -v+"$minutes"M +"%l:%M:%S %p" | sed 's/^ //'
+        # 12-hour format with AM/PM including seconds - avoid pipe and sed
+        local time_output=$(date -v+"$minutes"M +"%l:%M:%S %p")
+        echo "${time_output# }"  # Remove leading space with parameter expansion
     else
         # 24-hour format including seconds
         date -v+"$minutes"M +"%H:%M:%S"
@@ -98,11 +99,27 @@ format_duration() {
     local minutes=$(( total_minutes % 60 ))
 
     if [[ "$hours" -gt 0 && "$minutes" -gt 0 ]]; then
-        echo "$hours hour(s) $minutes minute(s)"
+        if [[ "$hours" -eq 1 && "$minutes" -eq 1 ]]; then
+            echo "1 hour 1 minute"
+        elif [[ "$hours" -eq 1 ]]; then
+            echo "1 hour $minutes minutes"
+        elif [[ "$minutes" -eq 1 ]]; then
+            echo "$hours hours 1 minute"
+        else
+            echo "$hours hours $minutes minutes"
+        fi
     elif [[ "$hours" -gt 0 ]]; then
-        echo "$hours hour(s)"
+        if [[ "$hours" -eq 1 ]]; then
+            echo "1 hour"
+        else
+            echo "$hours hours"
+        fi
     else
-        echo "$minutes minute(s)"
+        if [[ "$minutes" -eq 1 ]]; then
+            echo "1 minute"
+        else
+            echo "$minutes minutes"
+        fi
     fi
 }
 
@@ -147,7 +164,8 @@ check_status() {
         # Calculate end time with time format preference
         local end_time
         if [[ "${alfred_time_format:-a}" == "a" ]]; then
-            end_time=$(date -r $(( start_seconds + total_seconds )) "+%l:%M %p" | sed 's/^ //')
+            local time_output=$(date -r $(( start_seconds + total_seconds )) "+%l:%M %p")
+            end_time="${time_output# }"
         else
             end_time=$(date -r $(( start_seconds + total_seconds )) "+%H:%M")
         fi
@@ -355,27 +373,35 @@ generate_output() {
         local subtitle=${remaining%%|*}
         local needs_rerun=${status_data##*|}
 
-        # Escape JSON special characters
-        title=${title//\"/\\\"}
-        subtitle=${subtitle//\"/\\\"}
+        # Most titles/subtitles won't have quotes, so skip escaping unless needed
+        [[ "$title" == *\"* ]] && title=${title//\"/\\\"}
+        [[ "$subtitle" == *\"* ]] && subtitle=${subtitle//\"/\\\"}
 
-        # Generate JSON with conditional rerun
-        local rerun_part=""
-        [[ "$needs_rerun" == "true" ]] && rerun_part='"rerun":1,'
-
-        echo '{'${rerun_part}'"items":[{"title":"'"$title"'","subtitle":"'"$subtitle"'","arg":"status","icon":{"path":"icon.png"}}]}'
+        # Generate JSON with conditional rerun in single operation
+        if [[ "$needs_rerun" == "true" ]]; then
+            echo '{"rerun":1,"items":[{"title":"'"$title"'","subtitle":"'"$subtitle"'","arg":"status","icon":{"path":"icon.png"}}]}'
+        else
+            echo '{"items":[{"title":"'"$title"'","subtitle":"'"$subtitle"'","arg":"status","icon":{"path":"icon.png"}}]}'
+        fi
         return
     fi
 
     # Check for target time format
     if [[ "$input_result" == TIME:* ]]; then
         local target_time=${input_result#TIME:}
-        local hour=${target_time%:*}
-        local minute=${target_time#*:}
+        local display_time
 
-        # To display the time in a user-friendly format
-        local display_time=$(date -j -f "%H:%M" "$target_time" "+%l:%M %p" 2>/dev/null | sed 's/^ //')
-        [[ $? -ne 0 ]] && display_time="$target_time"
+        # Optimized time display with single format check and error handling
+        if [[ "${alfred_time_format:-a}" == "a" ]]; then
+            local time_output
+            if time_output=$(date -j -f "%H:%M" "$target_time" "+%l:%M %p" 2>/dev/null); then
+                display_time="${time_output# }"
+            else
+                display_time="$target_time"
+            fi
+        else
+            display_time="$target_time"  # Use 24-hour format as-is
+        fi
 
         echo '{"items":[{"title":"Active until '"$display_time"'","subtitle":"Keep awake until specified time","arg":"'"$input_result"'","icon":{"path":"icon.png"}}]}'
         return
