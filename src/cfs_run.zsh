@@ -132,7 +132,7 @@ start_caffeinate_session() {
 
     # Ensure the minutes are a valid number and greater than 0
     if [[ ! "$total_minutes" =~ ^[0-9]+$ || "$total_minutes" -eq 0 ]]; then
-        notification "Error: Invalid duration: $total_minutes minutes" >&2
+        notification "Error: Invalid duration: $total_minutes minutes"
         exit 1
     fi
 
@@ -142,14 +142,15 @@ start_caffeinate_session() {
     # Kill any existing caffeinate processes
     kill_existing_caffeinate
 
-    # Start caffeinate with appropriate flags
-    if [[ "$allow_display_sleep" == "true" ]]; then
-        # Allow display to sleep (-i prevents idle sleep only)
-        nohup caffeinate -i -t "$total_seconds" >/dev/null 2>&1 &
-    else
-        # Prevent both idle sleep and display sleep
-        nohup caffeinate -d -i -t "$total_seconds" >/dev/null 2>&1 &
-    fi
+    # Start caffeinate synchronously in background
+    {
+        if [[ "$allow_display_sleep" == "true" ]]; then
+            caffeinate -i -t "$total_seconds"
+        else
+            caffeinate -d -i -t "$total_seconds"
+        fi
+        notification "Caffeinate session ended"
+    } &
 }
 
 # Function to start an indefinite caffeinate session
@@ -159,14 +160,15 @@ start_indefinite_session() {
     # Kill any existing caffeinate processes
     kill_existing_caffeinate
 
-    # Start caffeinate with appropriate flags for indefinite duration
-    if [[ "$allow_display_sleep" == "true" ]]; then
-        # Allow display to sleep (-i prevents idle sleep only)
-        nohup caffeinate -i >/dev/null 2>&1 &
-    else
-        # Prevent both idle sleep and display sleep
-        nohup caffeinate -d -i >/dev/null 2>&1 &
-    fi
+    # Start caffeinate synchronously in background - simple pattern from notify.zsh
+    {
+        if [[ "$allow_display_sleep" == "true" ]]; then
+            caffeinate -i
+        else
+            caffeinate -d -i
+        fi
+        notification "Caffeinate session ended"
+    } &
 
     output_message "indefinitely" "false" "$allow_display_sleep"
 }
