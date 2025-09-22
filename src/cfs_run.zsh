@@ -1,5 +1,10 @@
 #!/bin/zsh --no-rcs
 
+# Function to send notifications using notificator
+function notification {
+    ./notificator --message "${1}" --title "${alfred_workflow_name}"
+}
+
 # Function to calculate the end time based on the given minutes
 calculate_end_time() {
     local minutes=$1
@@ -28,7 +33,7 @@ parse_time_format() {
 
     # Validate input - purely numeric and in range
     if [[ ! "$hour" =~ ^[0-9]+$ || ! "$minute" =~ ^[0-9]+$ || "$hour" -gt 23 || "$minute" -gt 59 ]]; then
-        echo "Error: Invalid time format: $time_str" >&2
+        notification "Error: Invalid time format: $time_str" >&2
         exit 1
     fi
 
@@ -111,7 +116,8 @@ output_message() {
         suffix="."
     fi
 
-    echo "${prefix} ${time_part}${suffix}"
+    # Send notification instead of echoing
+    notification "${prefix} ${time_part}${suffix}"
 }
 
 # Function to ensure no other caffeinate processes are running
@@ -126,7 +132,7 @@ start_caffeinate_session() {
 
     # Ensure the minutes are a valid number and greater than 0
     if [[ ! "$total_minutes" =~ ^[0-9]+$ || "$total_minutes" -eq 0 ]]; then
-        echo "Error: Invalid duration: $total_minutes minutes" >&2
+        notification "Error: Invalid duration: $total_minutes minutes" >&2
         exit 1
     fi
 
@@ -205,7 +211,7 @@ handle_duration() {
 main() {
     # Early return for invalid input
     if [[ "$INPUT" == "0" ]]; then
-        echo "Error: Invalid input. Please provide a valid duration."
+        notification "Error: Invalid input. Please provide a valid duration."
         exit 1
     fi
 
@@ -221,9 +227,9 @@ main() {
     if [[ "$INPUT" == "status" ]]; then
         # Just for completeness - status is handled in the filter script
         if pgrep -x "caffeinate" >/dev/null; then
-            echo "Caffeinate is active."
+            notification "Caffeinate is active."
         else
-            echo "Caffeinate is not active."
+            notification "Caffeinate is not active."
         fi
         return
     fi
@@ -239,7 +245,7 @@ main() {
     fi
 
     # If we get here, input is invalid
-    echo "Error: Invalid input format: $INPUT"
+    notification "Error: Invalid input format: $INPUT"
     exit 1
 }
 
