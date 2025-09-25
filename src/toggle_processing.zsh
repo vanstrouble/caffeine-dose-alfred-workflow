@@ -8,17 +8,17 @@ local display_sleep_allow=${display_sleep_allow:-false}
 
 # Function to send notifications using notificator
 function notification {
-    local sound_arg=""
     if [[ -n "$2" ]]; then
-        sound_arg="--sound $2"
+        ./notificator --message "${1}" --title "${alfred_workflow_name}" --sound "$2"
+    else
+        ./notificator --message "${1}" --title "${alfred_workflow_name}"
     fi
-    ./notificator --message "${1}" --title "${alfred_workflow_name}" $sound_arg
 }
 
 if [[ "$INPUT" == "off" ]]; then
     # Kill all caffeinate processes
     pkill -x "caffeinate" 2>/dev/null
-    notification "Caffeinate deactivated" "Glass"
+    notification "Caffeinate deactivated" "Boop"
 elif [[ "$INPUT" == "on" ]]; then
     # Kill any previous instance to ensure a clean execution
     pkill -x "caffeinate" 2>/dev/null

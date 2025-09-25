@@ -2,11 +2,11 @@
 
 # Function to send notifications using notificator
 function notification {
-    local sound_arg=""
     if [[ -n "$2" ]]; then
-        sound_arg="--sound $2"
+        ./notificator --message "${1}" --title "${alfred_workflow_name}" --sound "$2"
+    else
+        ./notificator --message "${1}" --title "${alfred_workflow_name}"
     fi
-    ./notificator --message "${1}" --title "${alfred_workflow_name}" $sound_arg
 }
 
 # Function to calculate the end time based on the given minutes
@@ -153,7 +153,7 @@ start_caffeinate_session() {
         else
             caffeinate -d -i -t "$total_seconds"
         fi
-        notification "Caffeinate session ended" "Glass"
+        notification "Caffeinate session ended" "Boop"
     } &
 }
 
@@ -171,7 +171,7 @@ start_indefinite_session() {
         else
             caffeinate -d -i
         fi
-        notification "Caffeinate session ended" "Glass"
+        notification "Caffeinate session ended" "Boop"
     } &
 
     output_message "indefinitely" "false" "$allow_display_sleep"
