@@ -2,7 +2,11 @@
 
 # Function to send notifications using notificator
 function notification {
-    ./notificator --message "${1}" --title "${alfred_workflow_name}"
+    local sound_arg=""
+    if [[ -n "$2" ]]; then
+        sound_arg="--sound $2"
+    fi
+    ./notificator --message "${1}" --title "${alfred_workflow_name}" $sound_arg
 }
 
 # Function to calculate the end time based on the given minutes
@@ -33,7 +37,7 @@ parse_time_format() {
 
     # Validate input - purely numeric and in range
     if [[ ! "$hour" =~ ^[0-9]+$ || ! "$minute" =~ ^[0-9]+$ || "$hour" -gt 23 || "$minute" -gt 59 ]]; then
-        notification "Error: Invalid time format: $time_str" >&2
+        notification "Error: Invalid time format: $time_str"
         exit 1
     fi
 
@@ -149,7 +153,7 @@ start_caffeinate_session() {
         else
             caffeinate -d -i -t "$total_seconds"
         fi
-        notification "Caffeinate session ended"
+        notification "Caffeinate session ended" "Glass"
     } &
 }
 
@@ -167,7 +171,7 @@ start_indefinite_session() {
         else
             caffeinate -d -i
         fi
-        notification "Caffeinate session ended"
+        notification "Caffeinate session ended" "Glass"
     } &
 
     output_message "indefinitely" "false" "$allow_display_sleep"
