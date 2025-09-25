@@ -1,6 +1,6 @@
-# <img src="img/dose-logo.png" alt="Caffeinate Dose Alfred Workflow Icon" width="45" align="center"/> Caffeine Dose | Alfred Workflow
+# <img src="img/caffeine-dose-logo.PNG" alt="Caffeinate Dose Alfred Workflow Icon" width="45" align="center"/> Caffeine Dose | Alfred Workflow
 
-Keeps your Mac awake using the `caffeinate` command-line utility. From Alfred, you can start or stop sessions, set how long your Mac should stay up (or until when), and check the current status — all in a few keystrokes.
+Keeps your Mac awake using the `caffeinate` command-line utility. No third-party or dedicated apps required. From Alfred you can start/stop sessions, set a duration or end time, and check the status.
 
 ## Download
 
@@ -11,15 +11,15 @@ Keeps your Mac awake using the `caffeinate` command-line utility. From Alfred, y
 
 ## Usage
 
-### Keep your Mac awake (coffee)
+### Keep your Mac awake (caff)
 
-<img src="img/coffee.png" alt="Alfred toggle Caffeinate image" width="550"/>
+<img src="img/caff.png" alt="Alfred toggle Caffeinate image" width="550"/>
 
-Use the `coffee` keyword to toggle caffeinate on or off, preventing macOS from sleeping.
+Use the `caff` keyword to toggle caffeinate on or off, preventing macOS from sleeping.
 
-- **Keyword:** `coffee`
+- **Keyword:** `caff`
 
-Hold the **Command (⌘)** key while using the `coffee` command, the session will allow the display to sleep.
+Hold the **Command (⌘)** key while using the `caff` command, the session will allow the display to sleep.
 
 ### One command for everything (cfs)
 
@@ -47,4 +47,4 @@ Hold the **Command (⌘)** key while using the `cfs` command, the session will a
 The `cfs` command supports both 12-hour (AM/PM) and 24-hour time formats.
 
 ### Customization
-Both `coffee` and `cfs` commands can be customized in the workflow settings. You can modify their keywords or behavior to better suit your needs.
+Both `caff` and `cfs` commands can be customized in the workflow settings. You can modify their keywords or behavior to better suit your needs.
