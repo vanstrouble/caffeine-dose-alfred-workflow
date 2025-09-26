@@ -3,10 +3,10 @@
 # Use hotkey_value if provided, otherwise use first argument
 INPUT="${hotkey_value:-$1}"
 
-# Default value for display_sleep_allow if not set
+# Default for allowing display sleep
 local display_sleep_allow=${display_sleep_allow:-false}
 
-# Function to send notifications using notificator
+# Send notifications using notificator
 function notification {
     if [[ -n "$2" ]]; then
         ./notificator --message "${1}" --title "${alfred_workflow_name}" --sound "$2"
@@ -16,22 +16,22 @@ function notification {
 }
 
 if [[ "$INPUT" == "off" ]]; then
-    # Kill all caffeinate processes
+    # Stop all caffeinate processes
     pkill -x "caffeinate" 2>/dev/null
     notification "Caffeinate deactivated" "Boop"
 elif [[ "$INPUT" == "on" ]]; then
-    # Kill any previous instance to ensure a clean execution
+    # Ensure no existing caffeinate processes to avoid duplicates
     pkill -x "caffeinate" 2>/dev/null
 
     # Start caffeinate with appropriate flags using nohup
     if [[ "$display_sleep_allow" == "true" ]]; then
-        # Allow display to sleep (-i prevents idle sleep only)
+        # Allow display to sleep; prevent only idle sleep (-i)
         nohup caffeinate -i >/dev/null 2>&1 &
-        notification "Caffeinate activated (display can sleep)"
+        notification "Caffeinate activated indefinitely (display can sleep)"
     else
-        # Prevent both idle sleep and display sleep
+        # Prevent both idle and display sleep
         nohup caffeinate -d -i >/dev/null 2>&1 &
-        notification "Caffeinate activated"
+        notification "Caffeinate activated indefinitely"
     fi
 else
     notification "Error: Invalid input. Use 'on' or 'off'"
