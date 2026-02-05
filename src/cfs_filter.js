@@ -6,6 +6,11 @@
 ObjC.import("Foundation");
 ObjC.import("Cocoa");
 
+// Global time format preference - read once at startup
+// "0" = 12-hour format (AM/PM), "1" = 24-hour format
+const TIME_FORMAT_VAR = $.NSProcessInfo.processInfo.environment.objectForKey('alfred_time_format');
+const TIME_FORMAT = TIME_FORMAT_VAR ? TIME_FORMAT_VAR.js : '0'; // Default to 12-hour
+
 // Helper function to pad numbers with zero
 function padZero(num) {
 	const n = parseInt(String(num).replace(/^0+/, "")) || 0;
@@ -45,29 +50,29 @@ function getCurrentTime() {
 	};
 }
 
-// Function to calculate end time based on minutes
-function calculateEndTime(minutes) {
-	const future = new Date(Date.now() + minutes * 60000);
+// Centralized time formatting function (DRY principle)
+function formatTime(dateOrTimestamp, includeSeconds = false) {
+	const date = typeof dateOrTimestamp === 'number'
+		? new Date(dateOrTimestamp)
+		: dateOrTimestamp;
 
-	// Get Alfred time format preference (default to 12-hour)
-	const timeFormatVar =
-		$.NSProcessInfo.processInfo.environment.objectForKey(
-			"alfred_time_format",
-		);
-	const timeFormat = timeFormatVar ? timeFormatVar.js : "a";
+	const formatter = $.NSDateFormatter.alloc.init;
 
-	if (timeFormat === "a") {
+	if (TIME_FORMAT === '0') {
 		// 12-hour format with AM/PM
-		const formatter = $.NSDateFormatter.alloc.init;
-		formatter.setDateFormat("h:mm:ss a");
-		const timeStr = formatter.stringFromDate(future).js;
-		return timeStr.replace(/^\s+/, ""); // Remove leading space
+		formatter.setDateFormat(includeSeconds ? 'h:mm:ss a' : 'h:mm a');
+		return formatter.stringFromDate(date).js.replace(/^\s+/, '');
 	} else {
 		// 24-hour format
-		const formatter = $.NSDateFormatter.alloc.init;
-		formatter.setDateFormat("HH:mm:ss");
-		return formatter.stringFromDate(future).js;
+		formatter.setDateFormat(includeSeconds ? 'HH:mm:ss' : 'HH:mm');
+		return formatter.stringFromDate(date).js;
 	}
+}
+
+// Function to calculate end time based on minutes (simplified with DRY)
+function calculateEndTime(minutes) {
+	const futureTimestamp = Date.now() + (minutes * 60000);
+	return formatTime(futureTimestamp, true); // Include seconds
 }
 
 // Function to get nearest future time based on input hour and minute
@@ -191,26 +196,9 @@ function checkStatus() {
 			let remainingSeconds = totalSeconds - durationSeconds;
 			remainingSeconds = Math.max(0, remainingSeconds);
 
-			// Calculate end time
+			// Calculate end time using centralized formatting
 			const endDate = new Date(startDate.getTime() + totalSeconds * 1000);
-			const timeFormatVar =
-				$.NSProcessInfo.processInfo.environment.objectForKey(
-					"alfred_time_format",
-				);
-			const timeFormat = timeFormatVar ? timeFormatVar.js : "a";
-
-			let endTimeStr;
-			if (timeFormat === "a") {
-				const formatter = $.NSDateFormatter.alloc.init;
-				formatter.setDateFormat("h:mm a");
-				endTimeStr = formatter
-					.stringFromDate(endDate)
-					.js.replace(/^\s+/, "");
-			} else {
-				const formatter = $.NSDateFormatter.alloc.init;
-				formatter.setDateFormat("HH:mm");
-				endTimeStr = formatter.stringFromDate(endDate).js;
-			}
+			const endTimeStr = formatTime(endDate); // No seconds for status
 
 			const title = `Caffeinate active until ${endTimeStr}`;
 
@@ -443,30 +431,15 @@ function generateOutput(inputResult) {
 	// Check for target time format
 	if (inputResult.startsWith("TIME:")) {
 		const targetTime = inputResult.substring(5);
-		const timeFormatVar =
-			$.NSProcessInfo.processInfo.environment.objectForKey(
-				"alfred_time_format",
-			);
-		const timeFormat = timeFormatVar ? timeFormatVar.js : "a";
 
+		// Parse target time and format using centralized function
 		let displayTime;
-		if (timeFormat === "a") {
-			try {
-				const [hour, minute] = targetTime
-					.split(":")
-					.map((n) => parseInt(n));
-				const tempDate = new Date();
-				tempDate.setHours(hour, minute, 0, 0);
-
-				const formatter = $.NSDateFormatter.alloc.init;
-				formatter.setDateFormat("h:mm a");
-				displayTime = formatter
-					.stringFromDate(tempDate)
-					.js.replace(/^\s+/, "");
-			} catch (error) {
-				displayTime = targetTime;
-			}
-		} else {
+		try {
+			const [hour, minute] = targetTime.split(':').map(n => parseInt(n));
+			const tempDate = new Date();
+			tempDate.setHours(hour, minute, 0, 0);
+			displayTime = formatTime(tempDate); // Use centralized formatting
+		} catch (error) {
 			displayTime = targetTime;
 		}
 
