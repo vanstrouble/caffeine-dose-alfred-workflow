@@ -263,83 +263,7 @@ function parseTimeInput(hour, minute = 0, ampm = "") {
 	}
 }
 
-// Input pattern handlers using strategy pattern (DRY principle)
-const INPUT_PATTERNS = [
-	// Status command
-	{ regex: /^s$/, handler: () => "status" },
-
-	// Indefinite mode
-	{ regex: /^i$/, handler: () => "indefinite" },
-
-	// Hours format: 2h
-	{ regex: /^(\d+)h$/, handler: (match) => String(parseInt(match[1]) * 60) },
-
-	// Direct minutes: 30
-	{ regex: /^\d+$/, handler: (match) => match[0] },
-
-	// Hour with colon: 8:
-	{
-		regex: /^(\d{1,2}):$/,
-		handler: (match) => {
-			const hour = parseInt(match[1].replace(/^0+/, "")) || 0;
-			const currentTime = getCurrentTime();
-			const totalMinutes = getNearestFutureTime(
-				hour,
-				0,
-				currentTime.hour,
-				currentTime.minute,
-			);
-			const futureTime = calculateFutureTime(
-				totalMinutes,
-				currentTime.hour,
-				currentTime.minute,
-			);
-			return futureTime.replace(/:(\d+)$/, ":00"); // Force minutes to 00
-		},
-	},
-
-	// Hour only: 8
-	{
-		regex: /^(\d{1,2})$/,
-		handler: (match) => {
-			const hour = parseInt(match[1].replace(/^0+/, "")) || 0;
-			return parseTimeInput(hour);
-		},
-	},
-
-	// Hour with AM/PM: 8am, 8p, 8pm
-	{
-		regex: /^(\d{1,2})([aApP])m?$/,
-		handler: (match) => {
-			const hour = parseInt(match[1]);
-			const ampm = match[2];
-			return parseTimeInput(hour, 0, ampm);
-		},
-	},
-
-	// Time with AM/PM: 8:30am, 8:30p
-	{
-		regex: /^(\d{1,2}):(\d{1,2})([aApP])m?$/,
-		handler: (match) => {
-			const hour = parseInt(match[1]);
-			const minute = parseInt(match[2]);
-			const ampm = match[3];
-			return parseTimeInput(hour, minute, ampm);
-		},
-	},
-
-	// Time without AM/PM: 8:30
-	{
-		regex: /^(\d{1,2}):(\d{1,2})$/,
-		handler: (match) => {
-			const hour = parseInt(match[1]);
-			const minute = parseInt(match[2]);
-			return parseTimeInput(hour, minute);
-		},
-	},
-];
-
-// Function to parse input and calculate total minutes
+// Optimized input parser without regex overhead (more efficient than pattern matching)
 function parseInput(input) {
 	// Handle empty input
 	if (!input || input.trim() === "") {
@@ -348,32 +272,137 @@ function parseInput(input) {
 
 	const parts = input.trim().split(/\s+/);
 
-	// Handle single input using pattern matching
+	// Handle two-part input first (hours and minutes)
+	if (parts.length === 2) {
+		const hours = parseInt(parts[0]);
+		const minutes = parseInt(parts[1]);
+
+		if (!isNaN(hours) && !isNaN(minutes) && hours >= 0 && minutes >= 0) {
+			return String(hours * 60 + minutes);
+		}
+		return "0"; // Invalid two-part input
+	}
+
+	// Handle single input - analyze by character structure
 	if (parts.length === 1) {
 		const part = parts[0];
+		const len = part.length;
 
-		// Try each pattern until one matches
-		for (const pattern of INPUT_PATTERNS) {
-			const match = part.match(pattern.regex);
-			if (match) {
-				return pattern.handler(match);
+		// Direct string comparisons (faster than regex)
+		if (part === "s") return "status";
+		if (part === "i") return "indefinite";
+
+		// Pure numbers (minutes)
+		if (/^\d+$/.test(part)) {
+			return part;
+		}
+
+		// Hours format (ends with 'h')
+		if (part.endsWith('h') && len > 1) {
+			const hours = parseInt(part.slice(0, -1));
+			if (!isNaN(hours) && hours >= 0) {
+				return String(hours * 60);
 			}
 		}
 
-		return "0"; // No pattern matched
-	}
-
-	// Handle two-part input (hours and minutes)
-	if (parts.length === 2) {
-		const hoursMatch = parts[0].match(/^\d+$/);
-		const minutesMatch = parts[1].match(/^\d+$/);
-
-		if (hoursMatch && minutesMatch) {
-			return String(parseInt(parts[0]) * 60 + parseInt(parts[1]));
+		// Time format analysis by structure
+		if (part.includes(':')) {
+			return parseTimeFormat(part);
 		}
+
+		// AM/PM format analysis
+		const lastChar = part.toLowerCase().slice(-1);
+		const secondLastChar = part.toLowerCase().slice(-2, -1);
+
+		if (lastChar === 'a' || lastChar === 'p' ||
+			(lastChar === 'm' && (secondLastChar === 'a' || secondLastChar === 'p'))) {
+			return parseAMPMFormat(part);
+		}
+
+		// Single hour format (just numbers, check if valid hour)
+		const hour = parseInt(part);
+		if (!isNaN(hour) && hour >= 0 && hour <= 23) {
+			return parseTimeInput(hour);
+		}
+
+		return "0"; // No valid format found
 	}
 
 	return "0"; // Invalid input
+}
+
+// Helper function to parse time formats (HH:MM)
+function parseTimeFormat(part) {
+	const colonIndex = part.indexOf(':');
+
+	// Hour with colon only (8:)
+	if (colonIndex === part.length - 1) {
+		const hour = parseInt(part.slice(0, -1));
+		if (!isNaN(hour) && hour >= 0 && hour <= 23) {
+			const currentTime = getCurrentTime();
+			const totalMinutes = getNearestFutureTime(hour, 0, currentTime.hour, currentTime.minute);
+			const futureTime = calculateFutureTime(totalMinutes, currentTime.hour, currentTime.minute);
+			return futureTime.replace(/:(\d+)$/, ':00');
+		}
+		return "0";
+	}
+
+	// Split time parts
+	const timeParts = part.split(':');
+	if (timeParts.length !== 2) return "0";
+
+	const hourPart = timeParts[0];
+	let minutePart = timeParts[1];
+	let ampm = "";
+
+	// Check for AM/PM in minute part
+	const lastChar = minutePart.toLowerCase().slice(-1);
+	const secondLastChar = minutePart.toLowerCase().slice(-2, -1);
+
+	if (lastChar === 'a' || lastChar === 'p') {
+		ampm = lastChar;
+		minutePart = minutePart.slice(0, -1);
+	} else if (lastChar === 'm' && (secondLastChar === 'a' || secondLastChar === 'p')) {
+		ampm = secondLastChar;
+		minutePart = minutePart.slice(0, -2);
+	}
+
+	const hour = parseInt(hourPart);
+	const minute = parseInt(minutePart);
+
+	if (!isNaN(hour) && !isNaN(minute) && hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
+		return parseTimeInput(hour, minute, ampm);
+	}
+
+	return "0";
+}
+
+// Helper function to parse AM/PM formats (8am, 8p, etc.)
+function parseAMPMFormat(part) {
+	let hour, ampm;
+
+	// Extract AM/PM indicator
+	if (part.toLowerCase().endsWith('am')) {
+		hour = parseInt(part.slice(0, -2));
+		ampm = 'a';
+	} else if (part.toLowerCase().endsWith('pm')) {
+		hour = parseInt(part.slice(0, -2));
+		ampm = 'p';
+	} else if (part.toLowerCase().endsWith('a')) {
+		hour = parseInt(part.slice(0, -1));
+		ampm = 'a';
+	} else if (part.toLowerCase().endsWith('p')) {
+		hour = parseInt(part.slice(0, -1));
+		ampm = 'p';
+	} else {
+		return "0";
+	}
+
+	if (!isNaN(hour) && hour >= 1 && hour <= 12) {
+		return parseTimeInput(hour, 0, ampm);
+	}
+
+	return "0";
 }
 
 // Centralized Alfred JSON response generator (DRY principle)
