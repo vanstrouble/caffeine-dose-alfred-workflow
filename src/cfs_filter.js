@@ -372,34 +372,42 @@ function parseInput(input) {
 	return "0"; // Default case: invalid input
 }
 
+// Centralized Alfred JSON response generator (DRY principle)
+function createAlfredResponse(title, subtitle, arg, needsRerun = false) {
+	const response = {
+		items: [{
+			title: title,
+			subtitle: subtitle,
+			arg: arg,
+			icon: { path: "icon.png" }
+		}]
+	};
+
+	if (needsRerun) {
+		response.rerun = 1;
+	}
+
+	return JSON.stringify(response);
+}
+
 // Function to generate Alfred JSON output
 function generateOutput(inputResult) {
 	// Check for invalid input first
 	if (inputResult === "0") {
-		return JSON.stringify({
-			items: [
-				{
-					title: "Invalid input",
-					subtitle: "Please provide a valid time format",
-					arg: "0",
-					icon: { path: "icon.png" },
-				},
-			],
-		});
+		return createAlfredResponse(
+			"Invalid input",
+			"Please provide a valid time format",
+			"0"
+		);
 	}
 
 	// Check for indefinite mode
 	if (inputResult === "indefinite") {
-		return JSON.stringify({
-			items: [
-				{
-					title: "Active indefinitely",
-					subtitle: "Keep your Mac awake until manually disabled",
-					arg: "indefinite",
-					icon: { path: "icon.png" },
-				},
-			],
-		});
+		return createAlfredResponse(
+			"Active indefinitely",
+			"Keep your Mac awake until manually disabled",
+			"indefinite"
+		);
 	}
 
 	// Check for status command
@@ -410,22 +418,7 @@ function generateOutput(inputResult) {
 		const subtitle = parts[1];
 		const needsRerun = parts[2] === "true";
 
-		const result = {
-			items: [
-				{
-					title: title,
-					subtitle: subtitle,
-					arg: "status",
-					icon: { path: "icon.png" },
-				},
-			],
-		};
-
-		if (needsRerun) {
-			result.rerun = 1;
-		}
-
-		return JSON.stringify(result);
+		return createAlfredResponse(title, subtitle, "status", needsRerun);
 	}
 
 	// Check for target time format
@@ -443,16 +436,11 @@ function generateOutput(inputResult) {
 			displayTime = targetTime;
 		}
 
-		return JSON.stringify({
-			items: [
-				{
-					title: `Active until ${displayTime}`,
-					subtitle: "Keep awake until specified time",
-					arg: inputResult,
-					icon: { path: "icon.png" },
-				},
-			],
-		});
+		return createAlfredResponse(
+			`Active until ${displayTime}`,
+			"Keep awake until specified time",
+			inputResult
+		);
 	}
 
 	// Handle duration in minutes
@@ -460,17 +448,12 @@ function generateOutput(inputResult) {
 	const endTime = calculateEndTime(minutes);
 	const formattedDuration = formatDuration(minutes);
 
-	return JSON.stringify({
-		rerun: 1,
-		items: [
-			{
-				title: `Active for ${formattedDuration}`,
-				subtitle: `Keep awake until around ${endTime}`,
-				arg: inputResult,
-				icon: { path: "icon.png" },
-			},
-		],
-	});
+	return createAlfredResponse(
+		`Active for ${formattedDuration}`,
+		`Keep awake until around ${endTime}`,
+		inputResult,
+		true // Always needs rerun for duration
+	);
 }
 
 // Main function
