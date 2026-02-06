@@ -12,6 +12,14 @@ const TIME_FORMAT_VAR =
 	$.NSProcessInfo.processInfo.environment.objectForKey("alfred_time_format");
 const TIME_FORMAT = TIME_FORMAT_VAR ? TIME_FORMAT_VAR.js : "0"; // Default to 12-hour
 
+// Global display sleep preference - read once at startup
+const DISPLAY_SLEEP_ALLOW_VAR =
+	$.NSProcessInfo.processInfo.environment.objectForKey("display_sleep_allow");
+const DISPLAY_SLEEP_ALLOW = DISPLAY_SLEEP_ALLOW_VAR ? DISPLAY_SLEEP_ALLOW_VAR.js === "true" : false;
+
+// Global icon path - easy to change if needed
+const ICON_PATH = "icon.png";
+
 // Helper function to pad numbers with zero
 function padZero(num) {
 	const n = parseInt(String(num).replace(/^0+/, "")) || 0;
@@ -424,16 +432,28 @@ function parseAMPMFormat(part) {
 }
 
 // Centralized Alfred JSON response generator (DRY principle)
-function createAlfredResponse(title, subtitle, arg, needsRerun = false) {
-	const response = {
-		items: [
-			{
-				title: title,
-				subtitle: subtitle,
+function createAlfredResponse(title, subtitle, arg, needsRerun = false, allowMods = true, valid = true) {
+	const item = {
+		title: title,
+		subtitle: subtitle,
+		arg: arg,
+		icon: { path: ICON_PATH },
+		valid: valid,
+	};
+
+	// Add Command modifier for display sleep control when appropriate
+	if (allowMods && arg !== "status" && arg !== "0") {
+		item.mods = {
+			cmd: {
+				subtitle: "⌘ Allow display sleep",
 				arg: arg,
-				icon: { path: "icon.png" },
+				variables: { display_sleep_allow: "true" },
 			},
-		],
+		};
+	}
+
+	const response = {
+		items: [item],
 	};
 
 	if (needsRerun) {
@@ -451,6 +471,8 @@ function generateOutput(inputResult) {
 			"Invalid input",
 			"Please provide a valid time format",
 			"0",
+			false,
+			false,
 		);
 	}
 
@@ -475,7 +497,7 @@ function generateOutput(inputResult) {
 			? "Define a new time or press 's' for details"
 			: "Caffeinate deactivated • Set a time to keep your Mac awake";
 
-		return createAlfredResponse(displayTitle, subtitle, "status", false);
+		return createAlfredResponse(displayTitle, subtitle, "status", false, false, false);
 	}
 
 	// Check for detailed status command (explicit 's')
