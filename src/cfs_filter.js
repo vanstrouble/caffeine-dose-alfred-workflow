@@ -4,17 +4,14 @@
 // Migrated from zsh to improve performance for Alfred workflow
 
 ObjC.import("Foundation");
-ObjC.import("Cocoa");
 
 // Global time format preference - read once at startup
 // "0" = 12-hour format (AM/PM), "1" = 24-hour format
-const TIME_FORMAT_VAR =
-	$.NSProcessInfo.processInfo.environment.objectForKey("alfred_time_format");
+const TIME_FORMAT_VAR = $.NSProcessInfo.processInfo.environment.objectForKey("alfred_time_format");
 const TIME_FORMAT = TIME_FORMAT_VAR ? TIME_FORMAT_VAR.js : "0"; // Default to 12-hour
 
 // Global display sleep preference - read once at startup
-const DISPLAY_SLEEP_ALLOW_VAR =
-	$.NSProcessInfo.processInfo.environment.objectForKey("display_sleep_allow");
+const DISPLAY_SLEEP_ALLOW_VAR = $.NSProcessInfo.processInfo.environment.objectForKey("display_sleep_allow");
 const DISPLAY_SLEEP_ALLOW = DISPLAY_SLEEP_ALLOW_VAR ? DISPLAY_SLEEP_ALLOW_VAR.js === "true" : false;
 
 // Global icon path - easy to change if needed
@@ -290,6 +287,16 @@ function createAlfredResponse(title, subtitle, arg, needsRerun = false, allowMod
 }
 
 function generateOutput(inputResult) {
+	if (inputResult === "simple_status") {
+		const [originalTitle] = checkStatus().split("|");
+		const isActive = originalTitle !== "Caffeinate deactivated";
+		const displayTitle = isActive ? originalTitle : "Caffeine Dose";
+		const subtitle = isActive
+			? "Set a new time, check status ('s'), or deactivate ('d')"
+			: "Caffeinate deactivated • Set a time to keep your Mac awake";
+		return createAlfredResponse(displayTitle, subtitle, "status", false, false, false);
+	}
+
 	if (inputResult === "0") {
 		return createAlfredResponse("Invalid input", "Please provide a valid time format", "0", false, false);
 	}
@@ -307,19 +314,9 @@ function generateOutput(inputResult) {
 		return createAlfredResponse("Caffeinate already deactivated", "No active session to stop", "deactivate", false, false, false);
 	}
 
-	if (inputResult === "simple_status") {
-		const [originalTitle] = checkStatus().split("|");
-		const isActive = originalTitle !== "Caffeinate deactivated";
-		const displayTitle = isActive ? originalTitle : "Caffeine Dose";
-		const subtitle = isActive
-			? "Define a new time or press 's' for details"
-			: "Caffeinate deactivated • Set a time to keep your Mac awake";
-		return createAlfredResponse(displayTitle, subtitle, "status", false, false, false);
-	}
-
 	if (inputResult === "status") {
 		const [title, subtitle, needsRerun] = checkStatus().split("|");
-		return createAlfredResponse(title, subtitle, "status", needsRerun === "true");
+		return createAlfredResponse(title, subtitle, "status", needsRerun === "true", false, false);
 	}
 
 	if (inputResult.startsWith("TIME:")) {
