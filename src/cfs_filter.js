@@ -467,15 +467,15 @@ function generateOutput(inputResult) {
 	if (inputResult === "simple_status") {
 		const statusData = checkStatus();
 		const parts = statusData.split("|");
-		const title = parts[0];
+		const originalTitle = parts[0];
+		const isActive = originalTitle !== "Caffeinate deactivated";
 
-		// Simple and elegant subtitle - guide the user
-		const isActive = title !== "Caffeinate deactivated";
+		const displayTitle = isActive ? originalTitle : "Caffeine Dosis";
 		const subtitle = isActive
 			? "Define a new time or press 's' for details"
-			: "Set a time to keep your Mac awake";
+			: "Caffeinate deactivated • Set a time to keep your Mac awake";
 
-		return createAlfredResponse(title, subtitle, "status", false);
+		return createAlfredResponse(displayTitle, subtitle, "status", false);
 	}
 
 	// Check for detailed status command (explicit 's')
