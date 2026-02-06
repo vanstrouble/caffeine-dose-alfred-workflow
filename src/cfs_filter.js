@@ -122,6 +122,25 @@ function formatDuration(totalMinutes) {
 	}
 }
 
+// Helper function to format remaining time efficiently (DRY principle)
+function formatRemainingTime(remainingSeconds, displaySleepInfo) {
+	if (remainingSeconds < 60) {
+		return `${remainingSeconds}s left${displaySleepInfo}`;
+	} else if (remainingSeconds < 3600) {
+		const minutes = Math.floor(remainingSeconds / 60);
+		const seconds = remainingSeconds % 60;
+		return seconds === 0
+			? `${minutes}m left${displaySleepInfo}`
+			: `${minutes}m ${seconds}s left${displaySleepInfo}`;
+	} else {
+		const hours = Math.floor(remainingSeconds / 3600);
+		const minutes = Math.floor((remainingSeconds % 3600) / 60);
+		return minutes === 0
+			? `${hours}h left${displaySleepInfo}`
+			: `${hours}h ${minutes}m left${displaySleepInfo}`;
+	}
+}
+
 // Function to get display sleep status
 function getDisplaySleepStatus(caffinateArgs) {
 	return caffinateArgs.includes("-d")
@@ -129,13 +148,19 @@ function getDisplaySleepStatus(caffinateArgs) {
 		: " - Display can sleep";
 }
 
-// Function to check caffeinate status
+// Optimized function to check caffeinate status (performance critical for instant display)
 function checkStatus() {
+	const errorResponse =
+		"Caffeinate deactivated|Run a command to start caffeinate|false";
+
 	try {
-		// Use NSRunningApplication to check for caffeinate process
+		// Single optimized subprocess call - combine pgrep + ps for efficiency
 		const task = $.NSTask.alloc.init;
-		task.setLaunchPath("/usr/bin/pgrep");
-		task.setArguments(["-x", "caffeinate"]);
+		task.setLaunchPath("/bin/sh");
+		task.setArguments([
+			"-c",
+			"pgrep -x caffeinate | head -1 | xargs -I {} ps -o lstart=,command= -p {}",
+		]);
 
 		const pipe = $.NSPipe.pipe;
 		task.setStandardOutput(pipe);
@@ -143,97 +168,67 @@ function checkStatus() {
 		task.waitUntilExit;
 
 		const data = pipe.fileHandleForReading.readDataToEndOfFile;
-		const pidString = $.NSString.alloc.initWithDataEncoding(
-			data,
-			$.NSUTF8StringEncoding,
-		).js;
+		const output = $.NSString.alloc
+			.initWithDataEncoding(data, $.NSUTF8StringEncoding)
+			.js.trim();
 
-		if (!pidString.trim()) {
-			return "Caffeinate deactivated|Run a command to start caffeinate|false";
+		if (!output) {
+			return errorResponse;
 		}
 
-		const pid = pidString.trim();
-
-		// Get process info using ps
-		const psTask = $.NSTask.alloc.init;
-		psTask.setLaunchPath("/bin/ps");
-		psTask.setArguments(["-o", "lstart=,command=", "-p", pid]);
-
-		const psPipe = $.NSPipe.pipe;
-		psTask.setStandardOutput(psPipe);
-		psTask.launch;
-		psTask.waitUntilExit;
-
-		const psData = psPipe.fileHandleForReading.readDataToEndOfFile;
-		const psOutput = $.NSString.alloc.initWithDataEncoding(
-			psData,
-			$.NSUTF8StringEncoding,
-		).js;
-
-		if (!psOutput.trim()) {
-			return "Caffeinate deactivated|Run a command to start caffeinate|false";
-		}
-
-		// Parse the ps output
-		const psLine = psOutput.trim();
-		const caffinateIndex = psLine.indexOf("caffeinate");
+		// Parse output more efficiently
+		const caffinateIndex = output.indexOf("caffeinate");
 		if (caffinateIndex === -1) {
-			return "Caffeinate deactivated|Run a command to start caffeinate|false";
+			return errorResponse;
 		}
 
-		const startTime = psLine.substring(0, caffinateIndex).trim();
-		const caffinateArgs = psLine.substring(caffinateIndex + 10).trim();
+		const startTime = output.substring(0, caffinateIndex).trim();
+		const caffinateArgs = output.substring(caffinateIndex + 10).trim();
 
-		// Parse start time and calculate duration
+		// Calculate duration once
 		const startDate = new Date(startTime);
-		const currentDate = new Date();
-		const durationSeconds = Math.floor((currentDate - startDate) / 1000);
-
+		const durationSeconds = Math.floor(
+			(Date.now() - startDate.getTime()) / 1000,
+		);
 		const displaySleepInfo = getDisplaySleepStatus(caffinateArgs);
 
-		// Check for timed session
-		const timedMatch = caffinateArgs.match(/-t\s+(\d+)/);
-		if (timedMatch) {
-			const totalSeconds = parseInt(timedMatch[1]);
-			let remainingSeconds = totalSeconds - durationSeconds;
-			remainingSeconds = Math.max(0, remainingSeconds);
+		// Check for timed session using direct string search (faster than regex)
+		const tIndex = caffinateArgs.indexOf("-t");
+		if (tIndex !== -1) {
+			// Extract seconds value efficiently
+			const afterT = caffinateArgs.substring(tIndex + 2).trim();
+			const spaceIndex = afterT.indexOf(" ");
+			const totalSeconds = parseInt(
+				spaceIndex === -1 ? afterT : afterT.substring(0, spaceIndex),
+			);
 
-			// Calculate end time using centralized formatting
-			const endDate = new Date(startDate.getTime() + totalSeconds * 1000);
-			const endTimeStr = formatTime(endDate); // No seconds for status
+			if (!isNaN(totalSeconds)) {
+				const remainingSeconds = Math.max(
+					0,
+					totalSeconds - durationSeconds,
+				);
 
-			const title = `Caffeinate active until ${endTimeStr}`;
+				// Calculate end time using centralized formatting
+				const endDate = new Date(
+					startDate.getTime() + totalSeconds * 1000,
+				);
+				const endTimeStr = formatTime(endDate);
 
-			// Format remaining time
-			let subtitle;
-			if (remainingSeconds < 60) {
-				subtitle = `${remainingSeconds}s left${displaySleepInfo}`;
-			} else if (remainingSeconds < 3600) {
-				const minutes = Math.floor(remainingSeconds / 60);
-				const seconds = remainingSeconds % 60;
-				subtitle =
-					seconds === 0
-						? `${minutes}m left${displaySleepInfo}`
-						: `${minutes}m ${seconds}s left${displaySleepInfo}`;
-			} else {
-				const hours = Math.floor(remainingSeconds / 3600);
-				const minutes = Math.floor((remainingSeconds % 3600) / 60);
-				subtitle =
-					minutes === 0
-						? `${hours}h left${displaySleepInfo}`
-						: `${hours}h ${minutes}m left${displaySleepInfo}`;
+				const title = `Caffeinate active until ${endTimeStr}`;
+				const subtitle = formatRemainingTime(
+					remainingSeconds,
+					displaySleepInfo,
+				);
+				const needsRerun = remainingSeconds <= 3600 ? "true" : "false";
+
+				return `${title}|${subtitle}|${needsRerun}`;
 			}
-
-			const needsRerun = remainingSeconds <= 3600 ? "true" : "false";
-			return `${title}|${subtitle}|${needsRerun}`;
-		} else {
-			// Indefinite session
-			const title = "Caffeinate active indefinitely";
-			const subtitle = `Session running indefinitely${displaySleepInfo}`;
-			return `${title}|${subtitle}|false`;
 		}
+
+		// Indefinite session
+		return `Caffeinate active indefinitely|Session running indefinitely${displaySleepInfo}|false`;
 	} catch (error) {
-		return "Caffeinate deactivated|Run a command to start caffeinate|false";
+		return errorResponse;
 	}
 }
 
@@ -298,7 +293,7 @@ function parseInput(input) {
 		}
 
 		// Hours format (ends with 'h')
-		if (part.endsWith('h') && len > 1) {
+		if (part.endsWith("h") && len > 1) {
 			const hours = parseInt(part.slice(0, -1));
 			if (!isNaN(hours) && hours >= 0) {
 				return String(hours * 60);
@@ -306,7 +301,7 @@ function parseInput(input) {
 		}
 
 		// Time format analysis by structure
-		if (part.includes(':')) {
+		if (part.includes(":")) {
 			return parseTimeFormat(part);
 		}
 
@@ -314,8 +309,12 @@ function parseInput(input) {
 		const lastChar = part.toLowerCase().slice(-1);
 		const secondLastChar = part.toLowerCase().slice(-2, -1);
 
-		if (lastChar === 'a' || lastChar === 'p' ||
-			(lastChar === 'm' && (secondLastChar === 'a' || secondLastChar === 'p'))) {
+		if (
+			lastChar === "a" ||
+			lastChar === "p" ||
+			(lastChar === "m" &&
+				(secondLastChar === "a" || secondLastChar === "p"))
+		) {
 			return parseAMPMFormat(part);
 		}
 
@@ -333,22 +332,31 @@ function parseInput(input) {
 
 // Helper function to parse time formats (HH:MM)
 function parseTimeFormat(part) {
-	const colonIndex = part.indexOf(':');
+	const colonIndex = part.indexOf(":");
 
 	// Hour with colon only (8:)
 	if (colonIndex === part.length - 1) {
 		const hour = parseInt(part.slice(0, -1));
 		if (!isNaN(hour) && hour >= 0 && hour <= 23) {
 			const currentTime = getCurrentTime();
-			const totalMinutes = getNearestFutureTime(hour, 0, currentTime.hour, currentTime.minute);
-			const futureTime = calculateFutureTime(totalMinutes, currentTime.hour, currentTime.minute);
-			return futureTime.replace(/:(\d+)$/, ':00');
+			const totalMinutes = getNearestFutureTime(
+				hour,
+				0,
+				currentTime.hour,
+				currentTime.minute,
+			);
+			const futureTime = calculateFutureTime(
+				totalMinutes,
+				currentTime.hour,
+				currentTime.minute,
+			);
+			return futureTime.replace(/:(\d+)$/, ":00");
 		}
 		return "0";
 	}
 
 	// Split time parts
-	const timeParts = part.split(':');
+	const timeParts = part.split(":");
 	if (timeParts.length !== 2) return "0";
 
 	const hourPart = timeParts[0];
@@ -359,10 +367,13 @@ function parseTimeFormat(part) {
 	const lastChar = minutePart.toLowerCase().slice(-1);
 	const secondLastChar = minutePart.toLowerCase().slice(-2, -1);
 
-	if (lastChar === 'a' || lastChar === 'p') {
+	if (lastChar === "a" || lastChar === "p") {
 		ampm = lastChar;
 		minutePart = minutePart.slice(0, -1);
-	} else if (lastChar === 'm' && (secondLastChar === 'a' || secondLastChar === 'p')) {
+	} else if (
+		lastChar === "m" &&
+		(secondLastChar === "a" || secondLastChar === "p")
+	) {
 		ampm = secondLastChar;
 		minutePart = minutePart.slice(0, -2);
 	}
@@ -370,7 +381,14 @@ function parseTimeFormat(part) {
 	const hour = parseInt(hourPart);
 	const minute = parseInt(minutePart);
 
-	if (!isNaN(hour) && !isNaN(minute) && hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
+	if (
+		!isNaN(hour) &&
+		!isNaN(minute) &&
+		hour >= 0 &&
+		hour <= 23 &&
+		minute >= 0 &&
+		minute <= 59
+	) {
 		return parseTimeInput(hour, minute, ampm);
 	}
 
@@ -382,18 +400,18 @@ function parseAMPMFormat(part) {
 	let hour, ampm;
 
 	// Extract AM/PM indicator
-	if (part.toLowerCase().endsWith('am')) {
+	if (part.toLowerCase().endsWith("am")) {
 		hour = parseInt(part.slice(0, -2));
-		ampm = 'a';
-	} else if (part.toLowerCase().endsWith('pm')) {
+		ampm = "a";
+	} else if (part.toLowerCase().endsWith("pm")) {
 		hour = parseInt(part.slice(0, -2));
-		ampm = 'p';
-	} else if (part.toLowerCase().endsWith('a')) {
+		ampm = "p";
+	} else if (part.toLowerCase().endsWith("a")) {
 		hour = parseInt(part.slice(0, -1));
-		ampm = 'a';
-	} else if (part.toLowerCase().endsWith('p')) {
+		ampm = "a";
+	} else if (part.toLowerCase().endsWith("p")) {
 		hour = parseInt(part.slice(0, -1));
-		ampm = 'p';
+		ampm = "p";
 	} else {
 		return "0";
 	}
