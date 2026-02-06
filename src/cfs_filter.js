@@ -174,6 +174,7 @@ function parseInput(input) {
 		const part = parts[0];
 		if (part === "s") return "status";
 		if (part === "i") return "indefinite";
+		if (part === "d") return "deactivate";
 		if (/^\d+$/.test(part)) return part;
 
 		if (part.endsWith("h") && part.length > 1) {
@@ -297,10 +298,19 @@ function generateOutput(inputResult) {
 		return createAlfredResponse("Active indefinitely", "Keep your Mac awake until manually disabled", "indefinite");
 	}
 
+	if (inputResult === "deactivate") {
+		const [statusTitle] = checkStatus().split("|");
+		const isActive = statusTitle !== "Caffeinate deactivated";
+		if (isActive) {
+			return createAlfredResponse("Deactivate caffeinate", "Stop keeping your Mac awake", "deactivate");
+		}
+		return createAlfredResponse("Caffeinate already deactivated", "No active session to stop", "deactivate", false, false, false);
+	}
+
 	if (inputResult === "simple_status") {
 		const [originalTitle] = checkStatus().split("|");
 		const isActive = originalTitle !== "Caffeinate deactivated";
-		const displayTitle = isActive ? originalTitle : "Caffeine Dosis";
+		const displayTitle = isActive ? originalTitle : "Caffeine Dose";
 		const subtitle = isActive
 			? "Define a new time or press 's' for details"
 			: "Caffeinate deactivated • Set a time to keep your Mac awake";
