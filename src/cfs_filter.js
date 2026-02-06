@@ -260,9 +260,9 @@ function parseTimeInput(hour, minute = 0, ampm = "") {
 
 // Optimized input parser without regex overhead (more efficient than pattern matching)
 function parseInput(input) {
-	// Handle empty input - show current status directly (simple and elegant)
+	// Handle empty input - show simple status with guide subtitle
 	if (!input || input.trim() === "") {
-		return "status";
+		return "simple_status";
 	}
 
 	const parts = input.trim().split(/\s+/);
@@ -463,12 +463,27 @@ function generateOutput(inputResult) {
 		);
 	}
 
-	// Check for status command
+	// Check for simple status command (from empty input)
+	if (inputResult === "simple_status") {
+		const statusData = checkStatus();
+		const parts = statusData.split("|");
+		const title = parts[0];
+
+		// Simple and elegant subtitle - guide the user
+		const isActive = title !== "Caffeinate deactivated";
+		const subtitle = isActive
+			? "Define a new time or press 's' for details"
+			: "Set a time to keep your Mac awake";
+
+		return createAlfredResponse(title, subtitle, "status", false);
+	}
+
+	// Check for detailed status command (explicit 's')
 	if (inputResult === "status") {
 		const statusData = checkStatus();
 		const parts = statusData.split("|");
 		const title = parts[0];
-		const subtitle = parts[1];
+		const subtitle = parts[1]; // Full detailed subtitle
 		const needsRerun = parts[2] === "true";
 
 		return createAlfredResponse(title, subtitle, "status", needsRerun);
