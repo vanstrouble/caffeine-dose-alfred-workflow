@@ -260,9 +260,9 @@ function parseTimeInput(hour, minute = 0, ampm = "") {
 
 // Optimized input parser without regex overhead (more efficient than pattern matching)
 function parseInput(input) {
-	// Handle empty input
+	// Handle empty input - show current status directly (simple and elegant)
 	if (!input || input.trim() === "") {
-		return "0";
+		return "status";
 	}
 
 	const parts = input.trim().split(/\s+/);
