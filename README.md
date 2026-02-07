@@ -11,6 +11,8 @@ Keeps your Mac awake using the `caffeinate` command-line utility. No third-party
 
 ## Usage
 
+Start typing your action in Alfred using your configured keyword (default: `caff` or `cfs`, or your preferred trigger).
+
 ### Keep your Mac awake (caff)
 
 <img src="img/caff.png" alt="Alfred toggle Caffeinate image" width="550"/>
@@ -25,7 +27,7 @@ Hold the **Command (⌘)** key while using the `caff` command, the session will 
 
 <img src="img/cfs.png" alt="Alfred set Caffeinate duration image" width="550"/>
 
-The `cfs` command allows you to set caffeinate to keep your Mac awake for a specific duration or until a specific time. It supports natural input formats for minutes, hours, and specific times, making it flexible and easy to use.
+The `cfs` command allows you to set caffeinate to keep your Mac awake for a specific duration or until a specific time. It also displays a simple status indicator showing whether caffeinate is currently active or inactive. It supports natural input formats for minutes, hours, and specific times, making it flexible and easy to use.
 
 - **Keyword:** `cfs [duration or time]`
 
@@ -36,6 +38,7 @@ Hold the **Command (⌘)** key while using the `cfs` command, the session will a
 | Command     | Description                                     |
 |-------------|-------------------------------------------------|
 | `cfs s`     | Shows status, time left, and if display can sleep. |
+| `cfs d`     | Deactivates caffeinate. |
 | `cfs i`     | Keeps your Mac awake indefinitely.              |
 | `cfs 15`    | Keeps your Mac awake for 15 minutes.            |
 | `cfs 2h`    | Keeps your Mac awake for 2 hours.               |
@@ -47,4 +50,12 @@ Hold the **Command (⌘)** key while using the `cfs` command, the session will a
 The `cfs` command supports both 12-hour (AM/PM) and 24-hour time formats.
 
 ### Customization
+
+**Keywords:**
 Both `caff` and `cfs` commands can be customized in the workflow settings. You can modify their keywords or behavior to better suit your needs.
+
+**Time format:**
+Set to 12-hour (AM/PM) or 24-hour in the workflow settings. This changes how times are shown in notifications and status.
+
+**Hotkeys:**
+Set hotkeys for quick and direct actions, like toggling caffeinate or starting a session instantly.
