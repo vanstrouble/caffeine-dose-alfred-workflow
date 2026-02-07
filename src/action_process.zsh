@@ -91,15 +91,17 @@ start_caffeinate_session() {
 
     kill_existing_caffeinate
 
-    local flags="-i"
-    [[ "$allow_display_sleep" != "true" ]] && flags="-d -i"
+    # Build caffeinate arguments dynamically
+    local -a caff_args=(-i)
+    [[ "$allow_display_sleep" != "true" ]] && caff_args=(-d -i)
 
     if [[ "$indefinite" == "true" ]]; then
-        nohup caffeinate $flags >/dev/null 2>&1 &
+        nohup caffeinate "${caff_args[@]}" >/dev/null 2>&1 &
         notification "Keeping awake indefinitely$([[ "$allow_display_sleep" == "true" ]] && echo " (Display can sleep)")"
     else
+        local timeout_seconds=$(( duration * 60 ))
         (
-            caffeinate $flags -t $(( duration * 60 ))
+            caffeinate "${caff_args[@]}" -t "$timeout_seconds"
             [[ $? -eq 0 ]] && notification "Caffeinate session ended" "Boop"
         ) &
     fi
@@ -119,10 +121,6 @@ handle_duration() {
     start_caffeinate_session "$1" "$2"
     output_message "$(calculate_end_time "$1")" "true" "$2"
 }
-
-
-
-
 
 # Main processing logic
 main() {
