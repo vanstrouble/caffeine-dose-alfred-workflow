@@ -4,6 +4,10 @@
 # Handles inputs from both cfs_filter.js and toggle_filter.zsh
 # Migrated from cfs_processing.zsh + toggle_processing.zsh for better maintainability
 
+# Global time format preference - read once at startup
+# "0" = 12-hour format (AM/PM), "1" = 24-hour format
+readonly TIME_FORMAT=${alfred_time_format:-0}
+
 # Function to send notifications using notificator
 function notification {
     if [[ -n "$2" ]]; then
@@ -17,7 +21,7 @@ function notification {
 calculate_end_time() {
     local minutes=$1
 
-    if [[ "${alfred_time_format:-a}" == "a" ]]; then
+    if [[ "$TIME_FORMAT" == "0" ]]; then
         # 12-hour format with AM/PM
         local time_output=$(date -v+"$minutes"M +"%l:%M %p")
         echo "${time_output# }"
@@ -53,9 +57,9 @@ calculate_minutes_until_target() {
 
 # Format time for display based on user preference
 format_display_time() {
-    local hour=$1 minute=$2 time_format=${3:-a}
+    local hour=$1 minute=$2 time_format=${3:-0}
 
-    if [[ "$time_format" == "a" ]]; then
+    if [[ "$time_format" == "0" ]]; then
         printf "%d:%02d %s" $(( hour == 0 ? 12 : hour > 12 ? hour - 12 : hour )) $minute $(( hour >= 12 ? "PM" : "AM" ))
     else
         printf "%02d:%02d" $hour $minute
@@ -107,7 +111,7 @@ handle_target_time() {
     local duration=$(calculate_minutes_until_target "$hour" "$minute")
 
     start_caffeinate_session "$duration" "$2"
-    output_message "$(format_display_time "$hour" "$minute" "${alfred_time_format:-a}")" "false" "$2"
+    output_message "$(format_display_time "$hour" "$minute" "$TIME_FORMAT")" "false" "$2"
 }
 
 # Handle numeric minute duration input
