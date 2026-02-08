@@ -60,7 +60,14 @@ format_display_time() {
     local hour=$1 minute=$2 time_format=${3:-0}
 
     if [[ "$time_format" == "0" ]]; then
-        printf "%d:%02d %s" $(( hour == 0 ? 12 : hour > 12 ? hour - 12 : hour )) $minute $(( hour >= 12 ? "PM" : "AM" ))
+        local display_hour=$(( hour == 0 ? 12 : hour > 12 ? hour - 12 : hour ))
+        local ampm
+        if [[ $hour -ge 12 ]]; then
+            ampm="PM"
+        else
+            ampm="AM"
+        fi
+        printf "%d:%02d %s" $display_hour $minute $ampm
     else
         printf "%02d:%02d" $hour $minute
     fi
