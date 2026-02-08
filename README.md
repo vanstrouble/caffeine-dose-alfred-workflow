@@ -52,10 +52,13 @@ The `cfs` command supports both 12-hour (AM/PM) and 24-hour time formats.
 ### Customization
 
 **Keywords:**
+
 Both `caff` and `cfs` commands can be customized in the workflow settings. You can modify their keywords or behavior to better suit your needs.
 
 **Time format:**
+
 Set to 12-hour (AM/PM) or 24-hour in the workflow settings. This changes how times are shown in notifications and status.
 
 **Hotkeys:**
+
 Set hotkeys for quick and direct actions, like toggling caffeinate or starting a session instantly.
