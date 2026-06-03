@@ -298,7 +298,7 @@ function generateOutput(inputResult) {
 	}
 
 	if (inputResult === "0") {
-		return createAlfredResponse("Invalid input", "Please provide a valid time format", "0", false, false);
+		return createAlfredResponse("Invalid input", "Please provide a valid time format", "0", false, false, false);
 	}
 
 	if (inputResult === "indefinite") {
