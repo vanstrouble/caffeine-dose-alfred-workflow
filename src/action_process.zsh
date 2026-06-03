@@ -131,7 +131,7 @@ handle_duration() {
 
 # Main processing logic
 main() {
-    local INPUT="${hotkey_value:-$1}"
+    local INPUT="$1"
     local display_sleep="${display_sleep_allow:-false}"
 
     [[ -z "$INPUT" || "$INPUT" == "0" ]] && {
@@ -150,7 +150,7 @@ main() {
         TIME:*)
             handle_target_time "$INPUT" "$display_sleep"
             ;;
-        [0-9]*)
+        [1-9]*)
             [[ "$INPUT" =~ ^[0-9]+$ ]] && handle_duration "$INPUT" "$display_sleep" || {
                 notification "Error: Invalid input format: $INPUT"
                 exit 1
