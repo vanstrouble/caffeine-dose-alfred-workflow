@@ -1,4 +1,4 @@
-# <img src="img/caffeine-dose-logo.PNG" alt="Caffeinate Dose Alfred Workflow Icon" width="45" align="center"/> Caffeine Dose | Alfred Workflow
+# <img src="img/caffeine-dose-logo.PNG" alt="Caffeinate Dose Alfred Workflow Icon" width="45"> Caffeine Dose | Alfred Workflow
 
 Keeps your Mac awake using the `caffeinate` command-line utility. No third-party or dedicated apps required. From Alfred you can start/stop sessions, set a duration or end time, and check the status.
 
